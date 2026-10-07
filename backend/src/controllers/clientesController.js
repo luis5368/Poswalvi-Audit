@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-const validarEstadoProveedor = (estado) => {
+const validarEstadoCliente = (estado) => {
   return ['Activo', 'Inactivo'].includes(estado);
 };
 
@@ -15,27 +15,25 @@ const validarTelefonoGuatemala = (telefono) => {
 };
 
 // ============================================================
-// GET /api/proveedores
-// Listar proveedores
+// GET /api/clientes
+// Listar clientes
 // ============================================================
-const obtenerProveedores = async (req, res) => {
+const obtenerClientes = async (req, res) => {
   try {
     const { estado, buscar } = req.query;
 
     let sql = `
       SELECT
-        id_proveedor,
+        id_cliente,
         nit,
-        nombre_proveedor,
-        razon_social,
+        nombre_cliente,
         telefono,
         correo,
         direccion,
-        contacto,
         estado,
         creado_en,
         actualizado_en
-      FROM proveedores
+      FROM clientes
       WHERE 1 = 1
     `;
 
@@ -50,66 +48,55 @@ const obtenerProveedores = async (req, res) => {
       sql += `
         AND (
           nit LIKE ?
-          OR nombre_proveedor LIKE ?
-          OR razon_social LIKE ?
+          OR nombre_cliente LIKE ?
           OR telefono LIKE ?
           OR correo LIKE ?
-          OR contacto LIKE ?
         )
       `;
-      params.push(
-        `%${buscar}%`,
-        `%${buscar}%`,
-        `%${buscar}%`,
-        `%${buscar}%`,
-        `%${buscar}%`,
-        `%${buscar}%`
-      );
+      params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
     }
 
-    sql += ` ORDER BY id_proveedor DESC`;
+    sql += ` ORDER BY id_cliente DESC`;
 
     const [rows] = await pool.query(sql, params);
 
     return res.json({
       ok: true,
       total: rows.length,
-      proveedores: rows
+      clientes: rows
     });
   } catch (error) {
-    console.error('Error al obtener proveedores:', error);
+    console.error('Error al obtener clientes:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al obtener proveedores'
+      mensaje: 'Error interno al obtener clientes'
     });
   }
 };
 
 // ============================================================
-// GET /api/proveedores/:id
-// Obtener proveedor por ID
+// GET /api/clientes/:id
+// Obtener cliente por ID
 // ============================================================
-const obtenerProveedorPorId = async (req, res) => {
+const obtenerClientePorId = async (req, res) => {
   try {
     const { id } = req.params;
 
     const [rows] = await pool.query(
       `
       SELECT
-        id_proveedor,
+        id_cliente,
         nit,
-        nombre_proveedor,
-        razon_social,
+        nombre_cliente,
         telefono,
         correo,
         direccion,
-        contacto,
         estado,
         creado_en,
         actualizado_en
-      FROM proveedores
-      WHERE id_proveedor = ?
+      FROM clientes
+      WHERE id_cliente = ?
       LIMIT 1
       `,
       [id]
@@ -118,47 +105,45 @@ const obtenerProveedorPorId = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({
         ok: false,
-        mensaje: 'Proveedor no encontrado'
+        mensaje: 'Cliente no encontrado'
       });
     }
 
     return res.json({
       ok: true,
-      proveedor: rows[0]
+      cliente: rows[0]
     });
   } catch (error) {
-    console.error('Error al obtener proveedor por ID:', error);
+    console.error('Error al obtener cliente por ID:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al obtener proveedor'
+      mensaje: 'Error interno al obtener el cliente'
     });
   }
 };
 
 // ============================================================
-// GET /api/proveedores/nit/:nit
-// Buscar proveedor por NIT
+// GET /api/clientes/nit/:nit
+// Buscar cliente por NIT
 // ============================================================
-const obtenerProveedorPorNit = async (req, res) => {
+const obtenerClientePorNit = async (req, res) => {
   try {
     const { nit } = req.params;
 
     const [rows] = await pool.query(
       `
       SELECT
-        id_proveedor,
+        id_cliente,
         nit,
-        nombre_proveedor,
-        razon_social,
+        nombre_cliente,
         telefono,
         correo,
         direccion,
-        contacto,
         estado,
         creado_en,
         actualizado_en
-      FROM proveedores
+      FROM clientes
       WHERE nit = ?
       LIMIT 1
       `,
@@ -168,52 +153,50 @@ const obtenerProveedorPorNit = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({
         ok: false,
-        mensaje: 'Proveedor no encontrado con ese NIT'
+        mensaje: 'Cliente no encontrado con ese NIT'
       });
     }
 
     return res.json({
       ok: true,
-      proveedor: rows[0]
+      cliente: rows[0]
     });
   } catch (error) {
-    console.error('Error al buscar proveedor por NIT:', error);
+    console.error('Error al obtener cliente por NIT:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al buscar proveedor por NIT'
+      mensaje: 'Error interno al buscar cliente por NIT'
     });
   }
 };
 
 // ============================================================
-// POST /api/proveedores
-// Crear proveedor
+// POST /api/clientes
+// Crear cliente
 // ============================================================
-const crearProveedor = async (req, res) => {
+const crearCliente = async (req, res) => {
   try {
     const {
       nit,
-      nombre_proveedor,
-      razon_social,
+      nombre_cliente,
       telefono,
       correo,
       direccion,
-      contacto,
       estado
     } = req.body;
 
     if (!nit || nit.trim() === '') {
       return res.status(400).json({
         ok: false,
-        mensaje: 'El NIT del proveedor es obligatorio'
+        mensaje: 'El NIT es obligatorio'
       });
     }
 
-    if (!nombre_proveedor || nombre_proveedor.trim() === '') {
+    if (!nombre_cliente || nombre_cliente.trim() === '') {
       return res.status(400).json({
         ok: false,
-        mensaje: 'El nombre del proveedor es obligatorio'
+        mensaje: 'El nombre del cliente es obligatorio'
       });
     }
 
@@ -233,7 +216,7 @@ const crearProveedor = async (req, res) => {
 
     const estadoFinal = estado || 'Activo';
 
-    if (!validarEstadoProveedor(estadoFinal)) {
+    if (!validarEstadoCliente(estadoFinal)) {
       return res.status(400).json({
         ok: false,
         mensaje: 'El estado debe ser Activo o Inactivo'
@@ -242,8 +225,8 @@ const crearProveedor = async (req, res) => {
 
     const [duplicado] = await pool.query(
       `
-      SELECT id_proveedor
-      FROM proveedores
+      SELECT id_cliente
+      FROM clientes
       WHERE LOWER(nit) = LOWER(?)
       LIMIT 1
       `,
@@ -253,84 +236,77 @@ const crearProveedor = async (req, res) => {
     if (duplicado.length > 0) {
       return res.status(409).json({
         ok: false,
-        mensaje: 'Ya existe un proveedor con ese NIT'
+        mensaje: 'Ya existe un cliente con ese NIT'
       });
     }
 
     const [result] = await pool.query(
       `
-      INSERT INTO proveedores (
+      INSERT INTO clientes (
         nit,
-        nombre_proveedor,
-        razon_social,
+        nombre_cliente,
         telefono,
         correo,
         direccion,
-        contacto,
         estado,
         creado_en,
         actualizado_en
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
       `,
       [
         nit.trim(),
-        nombre_proveedor.trim(),
-        razon_social || null,
+        nombre_cliente.trim(),
         telefono || null,
         correo || null,
         direccion || null,
-        contacto || null,
         estadoFinal
       ]
     );
 
     return res.status(201).json({
       ok: true,
-      mensaje: 'Proveedor creado correctamente',
-      id_proveedor: result.insertId
+      mensaje: 'Cliente creado correctamente',
+      id_cliente: result.insertId
     });
   } catch (error) {
-    console.error('Error al crear proveedor:', error);
+    console.error('Error al crear cliente:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al crear proveedor'
+      mensaje: 'Error interno al crear cliente'
     });
   }
 };
 
 // ============================================================
-// PUT /api/proveedores/:id
-// Actualizar proveedor
-// Nota: el NIT sí puede cambiar, validando duplicidad.
+// PUT /api/clientes/:id
+// Actualizar cliente
 // ============================================================
-const actualizarProveedor = async (req, res) => {
+const actualizarCliente = async (req, res) => {
   try {
     const { id } = req.params;
 
     const {
       nit,
-      nombre_proveedor,
-      razon_social,
+      nombre_cliente,
       telefono,
       correo,
       direccion,
-      contacto,
       estado
     } = req.body;
 
     if (!nit || nit.trim() === '') {
       return res.status(400).json({
         ok: false,
-        mensaje: 'El NIT del proveedor es obligatorio'
+        mensaje: 'El NIT es obligatorio'
       });
     }
 
-    if (!nombre_proveedor || nombre_proveedor.trim() === '') {
+    if (!nombre_cliente || nombre_cliente.trim() === '') {
       return res.status(400).json({
         ok: false,
-        mensaje: 'El nombre del proveedor es obligatorio'
+        mensaje: 'El nombre del cliente es obligatorio'
       });
     }
 
@@ -348,36 +324,36 @@ const actualizarProveedor = async (req, res) => {
       });
     }
 
-    if (estado && !validarEstadoProveedor(estado)) {
+    if (estado && !validarEstadoCliente(estado)) {
       return res.status(400).json({
         ok: false,
         mensaje: 'El estado debe ser Activo o Inactivo'
       });
     }
 
-    const [proveedor] = await pool.query(
+    const [cliente] = await pool.query(
       `
-      SELECT id_proveedor
-      FROM proveedores
-      WHERE id_proveedor = ?
+      SELECT id_cliente
+      FROM clientes
+      WHERE id_cliente = ?
       LIMIT 1
       `,
       [id]
     );
 
-    if (proveedor.length === 0) {
+    if (cliente.length === 0) {
       return res.status(404).json({
         ok: false,
-        mensaje: 'Proveedor no encontrado'
+        mensaje: 'Cliente no encontrado'
       });
     }
 
     const [duplicado] = await pool.query(
       `
-      SELECT id_proveedor
-      FROM proveedores
+      SELECT id_cliente
+      FROM clientes
       WHERE LOWER(nit) = LOWER(?)
-        AND id_proveedor <> ?
+        AND id_cliente <> ?
       LIMIT 1
       `,
       [nit.trim(), id]
@@ -386,32 +362,28 @@ const actualizarProveedor = async (req, res) => {
     if (duplicado.length > 0) {
       return res.status(409).json({
         ok: false,
-        mensaje: 'Ya existe otro proveedor con ese NIT'
+        mensaje: 'Ya existe otro cliente con ese NIT'
       });
     }
 
     await pool.query(
       `
-      UPDATE proveedores
+      UPDATE clientes
       SET
         nit = ?,
-        nombre_proveedor = ?,
-        razon_social = ?,
+        nombre_cliente = ?,
         telefono = ?,
         correo = ?,
         direccion = ?,
-        contacto = ?,
         estado = ?
-      WHERE id_proveedor = ?
+      WHERE id_cliente = ?
       `,
       [
         nit.trim(),
-        nombre_proveedor.trim(),
-        razon_social || null,
+        nombre_cliente.trim(),
         telefono || null,
         correo || null,
         direccion || null,
-        contacto || null,
         estado || 'Activo',
         id
       ]
@@ -419,79 +391,79 @@ const actualizarProveedor = async (req, res) => {
 
     return res.json({
       ok: true,
-      mensaje: 'Proveedor actualizado correctamente'
+      mensaje: 'Cliente actualizado correctamente'
     });
   } catch (error) {
-    console.error('Error al actualizar proveedor:', error);
+    console.error('Error al actualizar cliente:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al actualizar proveedor'
+      mensaje: 'Error interno al actualizar cliente'
     });
   }
 };
 
 // ============================================================
-// PATCH /api/proveedores/:id/estado
-// Cambiar estado del proveedor
+// PATCH /api/clientes/:id/estado
+// Cambiar estado de cliente
 // ============================================================
-const cambiarEstadoProveedor = async (req, res) => {
+const cambiarEstadoCliente = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body;
 
-    if (!validarEstadoProveedor(estado)) {
+    if (!validarEstadoCliente(estado)) {
       return res.status(400).json({
         ok: false,
         mensaje: 'El estado debe ser Activo o Inactivo'
       });
     }
 
-    const [proveedor] = await pool.query(
+    const [cliente] = await pool.query(
       `
-      SELECT id_proveedor
-      FROM proveedores
-      WHERE id_proveedor = ?
+      SELECT id_cliente
+      FROM clientes
+      WHERE id_cliente = ?
       LIMIT 1
       `,
       [id]
     );
 
-    if (proveedor.length === 0) {
+    if (cliente.length === 0) {
       return res.status(404).json({
         ok: false,
-        mensaje: 'Proveedor no encontrado'
+        mensaje: 'Cliente no encontrado'
       });
     }
 
     await pool.query(
       `
-      UPDATE proveedores
+      UPDATE clientes
       SET estado = ?
-      WHERE id_proveedor = ?
+      WHERE id_cliente = ?
       `,
       [estado, id]
     );
 
     return res.json({
       ok: true,
-      mensaje: `Proveedor marcado como ${estado}`
+      mensaje: `Cliente marcado como ${estado}`
     });
   } catch (error) {
-    console.error('Error al cambiar estado del proveedor:', error);
+    console.error('Error al cambiar estado del cliente:', error);
 
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error interno al cambiar estado del proveedor'
+      mensaje: 'Error interno al cambiar estado del cliente'
     });
   }
 };
 
 module.exports = {
-  obtenerProveedores,
-  obtenerProveedorPorId,
-  obtenerProveedorPorNit,
-  crearProveedor,
-  actualizarProveedor,
-  cambiarEstadoProveedor
+  obtenerClientes,
+  obtenerClientePorId,
+  obtenerClientePorNit,
+  crearCliente,
+  actualizarCliente,
+  cambiarEstadoCliente
 };
