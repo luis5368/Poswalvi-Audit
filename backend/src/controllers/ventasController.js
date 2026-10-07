@@ -873,8 +873,245 @@ const crearVenta = async (req, res) => {
   }
 };
 
+// ============================================================
+// PATCH /api/ventas/:id/anular
+// Anular venta V1.3
+// Devuelve inventario y registra movimiento de anulación.
+// ============================================================
+const anularVenta = async (req, res) => {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const { id } = req.params;
+    const { motivo_anulacion } = req.body;
+    const idUsuario = req.usuario.id_usuario;
+
+    if (!motivo_anulacion || motivo_anulacion.trim() === '') {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'El motivo de anulación es obligatorio'
+      });
+    }
+
+    const [ventaRows] = await connection.query(
+      `
+      SELECT
+        v.id_venta,
+        v.numero_documento,
+        v.id_sucursal,
+        v.id_caja,
+        v.id_turno,
+        v.estado,
+        v.total,
+        t.estado AS estado_turno
+      FROM ventas v
+      LEFT JOIN turnos_caja t ON v.id_turno = t.id_turno
+      WHERE v.id_venta = ?
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (ventaRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Venta no encontrada'
+      });
+    }
+
+    const venta = ventaRows[0];
+
+    if (venta.estado !== 'Registrada') {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje: 'Solo se pueden anular ventas en estado Registrada'
+      });
+    }
+
+    if (venta.estado_turno !== 'Abierto') {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje: 'No se puede anular una venta de un turno cerrado. Requiere proceso de nota de crédito o ajuste administrativo.'
+      });
+    }
+
+    const [detalleRows] = await connection.query(
+      `
+      SELECT
+        vd.id_venta_detalle,
+        vd.id_producto,
+        vd.cantidad,
+        p.nombre_producto,
+        p.controla_inventario
+      FROM venta_detalle vd
+      INNER JOIN productos p ON vd.id_producto = p.id_producto
+      WHERE vd.id_venta = ?
+      `,
+      [id]
+    );
+
+    if (detalleRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La venta no tiene detalle registrado'
+      });
+    }
+
+    const [bodegaRows] = await connection.query(
+      `
+      SELECT id_bodega
+      FROM bodegas
+      WHERE id_sucursal = ?
+        AND estado = 'Activa'
+      ORDER BY id_bodega ASC
+      LIMIT 1
+      `,
+      [venta.id_sucursal]
+    );
+
+    if (bodegaRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La sucursal de la venta no tiene una bodega activa configurada'
+      });
+    }
+
+    const idBodega = bodegaRows[0].id_bodega;
+
+    for (const item of detalleRows) {
+      if (Number(item.controla_inventario) === 1) {
+        const [saldoRows] = await connection.query(
+          `
+          SELECT
+            id_saldo,
+            stock_actual
+          FROM inventario_saldos
+          WHERE id_producto = ?
+            AND id_sucursal = ?
+            AND id_bodega = ?
+          LIMIT 1
+          FOR UPDATE
+          `,
+          [item.id_producto, venta.id_sucursal, idBodega]
+        );
+
+        if (saldoRows.length === 0) {
+          await connection.rollback();
+
+          return res.status(400).json({
+            ok: false,
+            mensaje: `El producto ${item.nombre_producto} no tiene saldo de inventario configurado`
+          });
+        }
+
+        const stockAnterior = Number(saldoRows[0].stock_actual);
+        const stockNuevo = stockAnterior + Number(item.cantidad);
+
+        await connection.query(
+          `
+          UPDATE inventario_saldos
+          SET stock_actual = ?
+          WHERE id_saldo = ?
+          `,
+          [stockNuevo, saldoRows[0].id_saldo]
+        );
+
+        await connection.query(
+          `
+          INSERT INTO inventario_movimientos (
+            id_producto,
+            id_usuario,
+            id_sucursal,
+            id_bodega,
+            id_turno,
+            tipo_movimiento,
+            origen,
+            referencia_id,
+            cantidad,
+            stock_anterior,
+            stock_nuevo,
+            motivo,
+            fecha_movimiento
+          )
+          VALUES (?, ?, ?, ?, ?, 'Anulacion', 'AnulacionVenta', ?, ?, ?, ?, ?, NOW())
+          `,
+          [
+            item.id_producto,
+            idUsuario,
+            venta.id_sucursal,
+            idBodega,
+            venta.id_turno,
+            venta.id_venta,
+            item.cantidad,
+            stockAnterior,
+            stockNuevo,
+            `Anulación venta ${venta.numero_documento}: ${motivo_anulacion.trim()}`
+          ]
+        );
+      }
+    }
+
+    await connection.query(
+      `
+      UPDATE ventas
+      SET
+        estado = 'Anulada',
+        motivo_anulacion = ?,
+        fecha_anulacion = NOW(),
+        anulado_por = ?
+      WHERE id_venta = ?
+      `,
+      [
+        motivo_anulacion.trim(),
+        idUsuario,
+        id
+      ]
+    );
+
+    await connection.commit();
+
+    return res.json({
+      ok: true,
+      mensaje: 'Venta anulada correctamente',
+      venta: {
+        id_venta: Number(id),
+        numero_documento: venta.numero_documento,
+        estado: 'Anulada',
+        motivo_anulacion: motivo_anulacion.trim()
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+
+    console.error('Error al anular venta:', error);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error interno al anular la venta'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   obtenerVentas,
   obtenerVentaPorId,
-  crearVenta
+  crearVenta,
+  anularVenta
 };
