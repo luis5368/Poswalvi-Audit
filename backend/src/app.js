@@ -8,6 +8,9 @@ const sucursalesRoutes = require('./routes/sucursalesRoutes');
 const cajasRoutes = require('./routes/cajasRoutes');
 const turnosCajaRoutes = require('./routes/turnosCajaRoutes');
 const ventasRoutes = require('./routes/ventasRoutes');
+const metodosPagoRoutes = require('./routes/metodosPagoRoutes');
+const inventarioSaldosRoutes = require('./routes/inventarioSaldosRoutes');
+const productosRoutes = require('./routes/productosRoutes');
 
 const app = express();
 
@@ -27,4 +30,7 @@ app.use('/api/sucursales', sucursalesRoutes);
 app.use('/api/cajas', cajasRoutes);
 app.use('/api/turnos-caja', turnosCajaRoutes);
 app.use('/api/ventas', ventasRoutes);
+app.use('/api/metodos-pago', metodosPagoRoutes);
+app.use('/api/inventario-saldos', inventarioSaldosRoutes);
+app.use('/api/productos', productosRoutes);
 module.exports = app;  
