@@ -803,8 +803,227 @@ const crearCompra = async (req, res) => {
   }
 };
 
+// ============================================================
+// PATCH /api/compras/:id/anular
+// Anular compra V1.3
+// Revierte inventario y registra movimiento de anulación.
+// ============================================================
+const anularCompra = async (req, res) => {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const { id } = req.params;
+    const { motivo_anulacion } = req.body;
+    const idUsuario = req.usuario.id_usuario;
+
+    if (!motivo_anulacion || motivo_anulacion.trim() === '') {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'El motivo de anulación es obligatorio'
+      });
+    }
+
+    const [compraRows] = await connection.query(
+      `
+      SELECT
+        id_compra,
+        numero_factura,
+        numero_documento_interno,
+        id_proveedor,
+        id_sucursal,
+        id_bodega,
+        estado,
+        total
+      FROM compras
+      WHERE id_compra = ?
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (compraRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Compra no encontrada'
+      });
+    }
+
+    const compra = compraRows[0];
+
+    if (compra.estado !== 'Registrada') {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje: 'Solo se pueden anular compras en estado Registrada'
+      });
+    }
+
+    const [detalleRows] = await connection.query(
+      `
+      SELECT
+        cd.id_compra_detalle,
+        cd.id_producto,
+        cd.cantidad,
+        cd.precio_unitario,
+        p.nombre_producto,
+        p.controla_inventario
+      FROM compra_detalle cd
+      INNER JOIN productos p ON cd.id_producto = p.id_producto
+      WHERE cd.id_compra = ?
+      `,
+      [id]
+    );
+
+    if (detalleRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La compra no tiene detalle registrado'
+      });
+    }
+
+    for (const item of detalleRows) {
+      if (Number(item.controla_inventario) === 1) {
+        const [saldoRows] = await connection.query(
+          `
+          SELECT
+            id_saldo,
+            stock_actual
+          FROM inventario_saldos
+          WHERE id_producto = ?
+            AND id_sucursal = ?
+            AND id_bodega = ?
+          LIMIT 1
+          FOR UPDATE
+          `,
+          [
+            item.id_producto,
+            compra.id_sucursal,
+            compra.id_bodega
+          ]
+        );
+
+        if (saldoRows.length === 0) {
+          await connection.rollback();
+
+          return res.status(400).json({
+            ok: false,
+            mensaje: `El producto ${item.nombre_producto} no tiene saldo de inventario configurado`
+          });
+        }
+
+        const stockAnterior = Number(saldoRows[0].stock_actual);
+        const cantidad = Number(item.cantidad);
+        const stockNuevo = stockAnterior - cantidad;
+
+        if (stockNuevo < 0) {
+          await connection.rollback();
+
+          return res.status(409).json({
+            ok: false,
+            mensaje: `No se puede anular la compra porque el producto ${item.nombre_producto} quedaría con stock negativo. Stock actual: ${stockAnterior}, cantidad a revertir: ${cantidad}`
+          });
+        }
+
+        await connection.query(
+          `
+          UPDATE inventario_saldos
+          SET stock_actual = ?
+          WHERE id_saldo = ?
+          `,
+          [stockNuevo, saldoRows[0].id_saldo]
+        );
+
+        await connection.query(
+          `
+          INSERT INTO inventario_movimientos (
+            id_producto,
+            id_usuario,
+            id_sucursal,
+            id_bodega,
+            id_turno,
+            tipo_movimiento,
+            origen,
+            referencia_id,
+            cantidad,
+            stock_anterior,
+            stock_nuevo,
+            motivo,
+            fecha_movimiento
+          )
+          VALUES (?, ?, ?, ?, NULL, 'Anulacion', 'AnulacionCompra', ?, ?, ?, ?, ?, NOW())
+          `,
+          [
+            item.id_producto,
+            idUsuario,
+            compra.id_sucursal,
+            compra.id_bodega,
+            compra.id_compra,
+            cantidad,
+            stockAnterior,
+            stockNuevo,
+            `Anulación compra ${compra.numero_documento_interno} / Factura ${compra.numero_factura}: ${motivo_anulacion.trim()}`
+          ]
+        );
+      }
+    }
+
+    await connection.query(
+      `
+      UPDATE compras
+      SET
+        estado = 'Anulada',
+        motivo_anulacion = ?,
+        fecha_anulacion = NOW(),
+        anulado_por = ?
+      WHERE id_compra = ?
+      `,
+      [
+        motivo_anulacion.trim(),
+        idUsuario,
+        id
+      ]
+    );
+
+    await connection.commit();
+
+    return res.json({
+      ok: true,
+      mensaje: 'Compra anulada correctamente',
+      compra: {
+        id_compra: Number(id),
+        numero_factura: compra.numero_factura,
+        numero_documento_interno: compra.numero_documento_interno,
+        estado: 'Anulada',
+        motivo_anulacion: motivo_anulacion.trim()
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+
+    console.error('Error al anular compra:', error);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error interno al anular compra'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   obtenerCompras,
   obtenerCompraPorId,
-  crearCompra
+  crearCompra,
+  anularCompra
 };

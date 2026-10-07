@@ -7,7 +7,8 @@ const verificarPermiso = require('../middlewares/permisoMiddleware');
 const {
   obtenerCompras,
   obtenerCompraPorId,
-  crearCompra
+  crearCompra,
+  anularCompra
 } = require('../controllers/comprasController');
 
 // Listar compras
@@ -32,6 +33,14 @@ router.post(
   verificarToken,
   verificarPermiso('Compras', 'Crear'),
   crearCompra
+);
+
+// Anular compra
+router.patch(
+  '/:id/anular',
+  verificarToken,
+  verificarPermiso('Compras', 'Anular'),
+  anularCompra
 );
 
 module.exports = router;
