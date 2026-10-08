@@ -17,6 +17,7 @@ const {
   ejecutarReglaPrecioProveedorAnormal,
   ejecutarReglaAnulacionesFrecuentes,
   ejecutarReglaMovimientoFueraHorario,
+  ejecutarReglaDiferenciaCaja,
   ejecutarMotorCompleto,
   obtenerResumenDashboard
 } = require('../controllers/auditoriaController');
@@ -103,6 +104,13 @@ router.post(
   verificarToken,
   verificarPermiso('Auditoria', 'Revisar'),
   ejecutarReglaMovimientoFueraHorario
+);
+
+router.post(
+  '/ejecutar/diferencia-caja',
+  verificarToken,
+  verificarPermiso('Auditoria', 'Revisar'),
+  ejecutarReglaDiferenciaCaja
 );
 
 router.post(

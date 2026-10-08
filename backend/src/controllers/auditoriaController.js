@@ -7,6 +7,7 @@ const {
   ejecutarPrecioProveedorAnormal,
   ejecutarAnulacionesFrecuentes,
   ejecutarMovimientoFueraHorario,
+  ejecutarDiferenciaCaja,
   ejecutarTodasLasReglas
 } = require('../services/auditoriaMotorService');
 
@@ -405,6 +406,25 @@ const ejecutarReglaMovimientoFueraHorario = async (req, res) => {
   }
 };
 
+// ============================================================
+// POST /api/auditoria/ejecutar/diferencia-caja
+// Ejecutar regla DIFERENCIA_CAJA
+// ============================================================
+const ejecutarReglaDiferenciaCaja = async (req, res) => {
+  try {
+    const resultado = await ejecutarDiferenciaCaja();
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error('Error al ejecutar regla DIFERENCIA_CAJA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error interno al ejecutar regla DIFERENCIA_CAJA'
+    });
+  }
+};
+
 const ejecutarMotorCompleto = async (req, res) => {
   try {
     const resultado = await ejecutarTodasLasReglas(req.usuario.id_usuario);
@@ -515,6 +535,7 @@ module.exports = {
   ejecutarReglaPrecioProveedorAnormal,
   ejecutarReglaAnulacionesFrecuentes,
   ejecutarReglaMovimientoFueraHorario,
+  ejecutarReglaDiferenciaCaja,
   ejecutarMotorCompleto,
   obtenerResumenDashboard
 };

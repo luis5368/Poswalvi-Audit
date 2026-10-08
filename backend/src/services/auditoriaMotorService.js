@@ -1169,6 +1169,176 @@ Detalle: ${mov.detalle_evento}.
   }
 };
 
+// ============================================================
+// REGLA: DIFERENCIA_CAJA
+// Detecta turnos cerrados con diferencia entre monto sistema y físico.
+// ============================================================
+const ejecutarDiferenciaCaja = async () => {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [reglaRows] = await connection.query(
+      `
+      SELECT id_regla
+      FROM auditoria_reglas
+      WHERE codigo_regla = 'DIFERENCIA_CAJA'
+        AND estado = 'Activa'
+      LIMIT 1
+      `
+    );
+
+    if (reglaRows.length === 0) {
+      await connection.rollback();
+
+      return {
+        ok: true,
+        regla: 'DIFERENCIA_CAJA',
+        mensaje: 'Regla no activa o no configurada',
+        turnos_detectados: 0,
+        hallazgos_generados: 0
+      };
+    }
+
+    const idRegla = reglaRows[0].id_regla;
+
+    const [turnos] = await connection.query(
+      `
+      SELECT
+        t.id_turno,
+        t.id_caja,
+        c.nombre_caja,
+        s.nombre_sucursal,
+        t.id_usuario,
+        u.usuario,
+        t.fecha_apertura,
+        t.fecha_cierre,
+        t.monto_apertura,
+        t.monto_cierre_sistema,
+        t.monto_cierre_fisico,
+        t.diferencia,
+        t.observaciones
+      FROM turnos_caja t
+      INNER JOIN cajas c ON t.id_caja = c.id_caja
+      INNER JOIN sucursales s ON c.id_sucursal = s.id_sucursal
+      INNER JOIN usuarios u ON t.id_usuario = u.id_usuario
+      WHERE t.estado = 'Cerrado'
+        AND t.diferencia <> 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM auditoria_hallazgos h
+          WHERE h.id_regla = ?
+            AND h.referencia_id = t.id_turno
+            AND h.modulo_origen = 'Caja'
+        )
+      `,
+      [idRegla]
+    );
+
+    let hallazgosGenerados = 0;
+
+    for (const turno of turnos) {
+      const diferenciaAbs = Math.abs(Number(turno.diferencia));
+
+      let nivelRiesgo = 'Bajo';
+
+      if (diferenciaAbs >= 100) {
+        nivelRiesgo = 'Alto';
+      } else if (diferenciaAbs >= 25) {
+        nivelRiesgo = 'Medio';
+      }
+
+      const descripcion = `Diferencia de caja detectada en ${turno.nombre_caja} / ${turno.nombre_sucursal}. Monto sistema: Q ${Number(turno.monto_cierre_sistema).toFixed(2)}, monto físico: Q ${Number(turno.monto_cierre_fisico).toFixed(2)}, diferencia: Q ${Number(turno.diferencia).toFixed(2)}.`;
+
+      const [hallazgoResult] = await connection.query(
+        `
+        INSERT INTO auditoria_hallazgos (
+          id_regla,
+          modulo_origen,
+          referencia_id,
+          tipo_irregularidad,
+          descripcion,
+          nivel_riesgo,
+          estado,
+          id_usuario_relacionado,
+          fecha_evento,
+          fecha_deteccion
+        )
+        VALUES (?, 'Caja', ?, 'Diferencia en cierre de caja', ?, ?, 'Pendiente', ?, ?, NOW())
+        `,
+        [
+          idRegla,
+          turno.id_turno,
+          descripcion,
+          nivelRiesgo,
+          turno.id_usuario,
+          turno.fecha_cierre
+        ]
+      );
+
+      const idHallazgo = hallazgoResult.insertId;
+
+      await connection.query(
+        `
+        INSERT INTO auditoria_evidencias (
+          id_hallazgo,
+          campo,
+          valor_anterior,
+          valor_actual,
+          descripcion
+        )
+        VALUES
+        (?, 'monto_cierre_sistema', NULL, ?, 'Monto esperado por el sistema al cerrar turno'),
+        (?, 'monto_cierre_fisico', NULL, ?, 'Monto físico reportado por el usuario'),
+        (?, 'diferencia', NULL, ?, 'Diferencia calculada entre sistema y físico'),
+        (?, 'id_turno', NULL, ?, 'Turno de caja relacionado'),
+        (?, 'caja', NULL, ?, 'Caja relacionada con la diferencia'),
+        (?, 'usuario', NULL, ?, 'Usuario responsable del turno')
+        `,
+        [
+          idHallazgo,
+          String(turno.monto_cierre_sistema),
+
+          idHallazgo,
+          String(turno.monto_cierre_fisico),
+
+          idHallazgo,
+          String(turno.diferencia),
+
+          idHallazgo,
+          String(turno.id_turno),
+
+          idHallazgo,
+          turno.nombre_caja,
+
+          idHallazgo,
+          turno.usuario
+        ]
+      );
+
+      hallazgosGenerados += 1;
+    }
+
+    await connection.commit();
+
+    return {
+      ok: true,
+      regla: 'DIFERENCIA_CAJA',
+      turnos_detectados: turnos.length,
+      hallazgos_generados: hallazgosGenerados
+    };
+  } catch (error) {
+    await connection.rollback();
+
+    console.error('Error en regla DIFERENCIA_CAJA:', error);
+
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const ejecutarTodasLasReglas = async (idUsuarioEjecutor = null) => {
   const resultados = [];
 
@@ -1179,6 +1349,7 @@ const ejecutarTodasLasReglas = async (idUsuarioEjecutor = null) => {
   resultados.push(await ejecutarPrecioProveedorAnormal(idUsuarioEjecutor));
   resultados.push(await ejecutarAnulacionesFrecuentes());
   resultados.push(await ejecutarMovimientoFueraHorario());
+  resultados.push(await ejecutarDiferenciaCaja());
 
   const totalHallazgosGenerados = resultados.reduce((total, resultado) => {
     return total + Number(resultado.hallazgos_generados || 0);
@@ -1201,5 +1372,6 @@ module.exports = {
   ejecutarPrecioProveedorAnormal,
   ejecutarAnulacionesFrecuentes,
   ejecutarMovimientoFueraHorario,
+  ejecutarDiferenciaCaja,
   ejecutarTodasLasReglas
 };
