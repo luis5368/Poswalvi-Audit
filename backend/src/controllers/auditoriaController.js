@@ -477,6 +477,7 @@ const obtenerResumenDashboard = async (req, res) => {
       FROM auditoria_hallazgos
       WHERE fecha_evento IS NOT NULL
         AND fecha_deteccion IS NOT NULL
+        AND fecha_deteccion >= fecha_evento
     `);
 
     // ========================================================
@@ -573,7 +574,13 @@ const obtenerResumenDashboard = async (req, res) => {
         h.estado,
         h.fecha_evento,
         h.fecha_deteccion,
-        TIMESTAMPDIFF(HOUR, h.fecha_evento, h.fecha_deteccion) AS tiempo_deteccion_horas,
+        CASE
+          WHEN h.fecha_evento IS NOT NULL
+          AND h.fecha_deteccion IS NOT NULL
+          AND h.fecha_deteccion >= h.fecha_evento
+          THEN TIMESTAMPDIFF(HOUR, h.fecha_evento, h.fecha_deteccion)
+          ELSE NULL
+        END AS tiempo_deteccion_horas,
         u.usuario AS usuario_relacionado,
         COUNT(e.id_evidencia) AS total_evidencias
       FROM auditoria_hallazgos h
