@@ -239,8 +239,13 @@ const login = async (req, res) => {
         nombre: user.nombre,
         apellido: user.apellido,
         usuario: user.usuario,
+        correo: user.correo,
         id_rol: user.id_rol,
-        rol: user.nombre_rol
+        nombre_rol: user.nombre_rol,
+        rol: user.nombre_rol,
+        id_sucursal: user.id_sucursal,
+        estado: user.estado,
+        requiere_cambio_password: Number(user.requiere_cambio_password || 0)
       }
     });
 
@@ -289,8 +294,181 @@ const perfil = async (req, res) => {
   });
 };
 
+// ============================================================
+// PATCH /api/auth/cambiar-password
+// Cambiar contraseña del usuario autenticado
+// ============================================================
+const cambiarPassword = async (req, res) => {
+  try {
+    const idUsuario = req.usuario.id_usuario;
+
+    const {
+      password_actual,
+      password_nueva,
+      confirmar_password
+    } = req.body;
+
+    if (!password_actual || password_actual.trim() === '') {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La contraseña actual es obligatoria'
+      });
+    }
+
+    if (!password_nueva || password_nueva.trim() === '') {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La nueva contraseña es obligatoria'
+      });
+    }
+
+    if (password_nueva.length < 8) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La nueva contraseña debe tener al menos 8 caracteres'
+      });
+    }
+
+    const tieneLetra = /[A-Za-z]/.test(password_nueva);
+    const tieneNumero = /[0-9]/.test(password_nueva);
+
+    if (!tieneLetra || !tieneNumero) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La nueva contraseña debe contener letras y números'
+      });
+    }
+
+    if (confirmar_password && password_nueva !== confirmar_password) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La confirmación de contraseña no coincide'
+      });
+    }
+
+    if (password_actual === password_nueva) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La nueva contraseña no puede ser igual a la contraseña actual'
+      });
+    }
+
+    const [usuarioRows] = await pool.query(
+      `
+      SELECT
+        id_usuario,
+        usuario,
+        password_hash,
+        estado
+      FROM usuarios
+      WHERE id_usuario = ?
+      LIMIT 1
+      `,
+      [idUsuario]
+    );
+
+    if (usuarioRows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Usuario no encontrado'
+      });
+    }
+
+    const usuario = usuarioRows[0];
+
+    if (usuario.estado !== 'Activo') {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'El usuario no está activo'
+      });
+    }
+
+    const passwordValida = await bcrypt.compare(
+      password_actual,
+      usuario.password_hash
+    );
+
+    if (!passwordValida) {
+      return res.status(401).json({
+        ok: false,
+        mensaje: 'La contraseña actual no es correcta'
+      });
+    }
+
+    const nuevoHash = await bcrypt.hash(password_nueva, 10);
+
+    await pool.query(
+      `
+      UPDATE usuarios
+      SET
+        password_hash = ?,
+        requiere_cambio_password = 0,
+        fecha_cambio_password = NOW(),
+        intentos_fallidos = 0,
+        bloqueo_hasta = NULL,
+        motivo_bloqueo = NULL,
+        actualizado_en = NOW()
+      WHERE id_usuario = ?
+      `,
+      [nuevoHash, idUsuario]
+    );
+
+    // Cerrar otras sesiones activas del mismo usuario, manteniendo la actual
+    if (req.usuario.id_sesion) {
+      await pool.query(
+        `
+        UPDATE usuario_sesion
+        SET
+          estado = 'Cerrada',
+          fecha_expiracion = NOW(),
+          motivo_cierre = 'Sesión cerrada por cambio de contraseña'
+        WHERE id_usuario = ?
+          AND id_sesion <> ?
+          AND estado = 'Activa'
+        `,
+        [idUsuario, req.usuario.id_sesion]
+      );
+    }
+
+    await pool.query(
+      `
+      INSERT INTO auditoria_logs_sistema (
+        id_usuario,
+        modulo,
+        accion,
+        descripcion,
+        ip_origen,
+        user_agent,
+        fecha_log
+      )
+      VALUES (?, 'Auth', 'CAMBIO_PASSWORD', ?, ?, ?, NOW())
+      `,
+      [
+        idUsuario,
+        `El usuario ${usuario.usuario} cambió su contraseña`,
+        req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || null,
+        req.headers['user-agent'] || null
+      ]
+    );
+
+    return res.json({
+      ok: true,
+      mensaje: 'Contraseña actualizada correctamente',
+      requiere_cambio_password: 0
+    });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error interno al cambiar contraseña'
+    });
+  }
+};
+
 module.exports = {
   login,
   logout,
-  perfil
+  perfil,
+  cambiarPassword
 };
