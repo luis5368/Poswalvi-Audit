@@ -441,15 +441,49 @@ const ejecutarMotorCompleto = async (req, res) => {
   }
 };
 
+// ============================================================
+// GET /api/auditoria/dashboard/resumen
+// Dashboard de auditoría continua V1.3
+// ============================================================
 const obtenerResumenDashboard = async (req, res) => {
   try {
-    const [totalHallazgos] = await pool.query(`
-      SELECT COUNT(*) AS total
+    // ========================================================
+    // 1. Resumen general
+    // ========================================================
+    const [resumenGeneral] = await pool.query(`
+      SELECT
+        COUNT(*) AS total_hallazgos,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
+        SUM(CASE WHEN estado = 'En revision' THEN 1 ELSE 0 END) AS en_revision,
+        SUM(CASE WHEN estado = 'Confirmado' THEN 1 ELSE 0 END) AS confirmados,
+        SUM(CASE WHEN estado = 'Descartado' THEN 1 ELSE 0 END) AS descartados,
+        SUM(CASE WHEN estado = 'Corregido' THEN 1 ELSE 0 END) AS corregidos,
+        SUM(CASE WHEN nivel_riesgo = 'Alto' THEN 1 ELSE 0 END) AS riesgo_alto,
+        SUM(CASE WHEN nivel_riesgo = 'Medio' THEN 1 ELSE 0 END) AS riesgo_medio,
+        SUM(CASE WHEN nivel_riesgo = 'Bajo' THEN 1 ELSE 0 END) AS riesgo_bajo,
+        SUM(CASE WHEN nivel_riesgo = 'Informativo' THEN 1 ELSE 0 END) AS riesgo_informativo,
+        SUM(CASE WHEN fecha_deteccion >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) AS hallazgos_ultimas_24h
       FROM auditoria_hallazgos
     `);
 
+    // ========================================================
+    // 2. Tiempo promedio de detección
+    // ========================================================
+    const [tiempoDeteccion] = await pool.query(`
+      SELECT
+        COALESCE(AVG(TIMESTAMPDIFF(HOUR, fecha_evento, fecha_deteccion)), 0) AS promedio_horas,
+        COALESCE(MIN(TIMESTAMPDIFF(HOUR, fecha_evento, fecha_deteccion)), 0) AS minimo_horas,
+        COALESCE(MAX(TIMESTAMPDIFF(HOUR, fecha_evento, fecha_deteccion)), 0) AS maximo_horas
+      FROM auditoria_hallazgos
+      WHERE fecha_evento IS NOT NULL
+        AND fecha_deteccion IS NOT NULL
+    `);
+
+    // ========================================================
+    // 3. Hallazgos por estado
+    // ========================================================
     const [porEstado] = await pool.query(`
-      SELECT 
+      SELECT
         estado,
         COUNT(*) AS total
       FROM auditoria_hallazgos
@@ -457,8 +491,11 @@ const obtenerResumenDashboard = async (req, res) => {
       ORDER BY total DESC
     `);
 
+    // ========================================================
+    // 4. Hallazgos por riesgo
+    // ========================================================
     const [porRiesgo] = await pool.query(`
-      SELECT 
+      SELECT
         nivel_riesgo,
         COUNT(*) AS total
       FROM auditoria_hallazgos
@@ -468,52 +505,156 @@ const obtenerResumenDashboard = async (req, res) => {
           WHEN 'Alto' THEN 1
           WHEN 'Medio' THEN 2
           WHEN 'Bajo' THEN 3
-          ELSE 4
+          WHEN 'Informativo' THEN 4
+          ELSE 5
         END
     `);
 
+    // ========================================================
+    // 5. Hallazgos por regla
+    // ========================================================
     const [porRegla] = await pool.query(`
-      SELECT 
+      SELECT
         r.codigo_regla,
         r.nombre_regla,
-        h.modulo_origen,
-        COUNT(*) AS total
+        r.modulo,
+        COUNT(h.id_hallazgo) AS total,
+        SUM(CASE WHEN h.estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
+        SUM(CASE WHEN h.nivel_riesgo = 'Alto' THEN 1 ELSE 0 END) AS riesgo_alto,
+        MAX(h.fecha_deteccion) AS ultima_deteccion
       FROM auditoria_hallazgos h
       INNER JOIN auditoria_reglas r ON h.id_regla = r.id_regla
-      GROUP BY r.codigo_regla, r.nombre_regla, h.modulo_origen
+      GROUP BY r.codigo_regla, r.nombre_regla, r.modulo
+      ORDER BY total DESC, ultima_deteccion DESC
+    `);
+
+    // ========================================================
+    // 6. Hallazgos por módulo origen
+    // ========================================================
+    const [porModulo] = await pool.query(`
+      SELECT
+        modulo_origen,
+        COUNT(*) AS total,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
+        SUM(CASE WHEN nivel_riesgo = 'Alto' THEN 1 ELSE 0 END) AS riesgo_alto
+      FROM auditoria_hallazgos
+      GROUP BY modulo_origen
       ORDER BY total DESC
     `);
 
+    // ========================================================
+    // 7. Reglas activas
+    // ========================================================
+    const [reglasActivas] = await pool.query(`
+      SELECT
+        codigo_regla,
+        nombre_regla,
+        modulo,
+        nivel_riesgo,
+        estado
+      FROM auditoria_reglas
+      WHERE estado = 'Activa'
+      ORDER BY modulo, codigo_regla
+    `);
+
+    // ========================================================
+    // 8. Últimos hallazgos con conteo de evidencias
+    // ========================================================
     const [ultimosHallazgos] = await pool.query(`
-      SELECT 
+      SELECT
         h.id_hallazgo,
-        h.tipo_irregularidad,
+        r.codigo_regla,
+        r.nombre_regla,
         h.modulo_origen,
+        h.referencia_id,
+        h.tipo_irregularidad,
+        h.descripcion,
         h.nivel_riesgo,
         h.estado,
         h.fecha_evento,
         h.fecha_deteccion,
-        TIMESTAMPDIFF(MINUTE, h.fecha_evento, h.fecha_deteccion) AS tiempo_deteccion_minutos,
-        r.nombre_regla
+        TIMESTAMPDIFF(HOUR, h.fecha_evento, h.fecha_deteccion) AS tiempo_deteccion_horas,
+        u.usuario AS usuario_relacionado,
+        COUNT(e.id_evidencia) AS total_evidencias
       FROM auditoria_hallazgos h
       INNER JOIN auditoria_reglas r ON h.id_regla = r.id_regla
-      ORDER BY h.fecha_deteccion DESC
+      LEFT JOIN usuarios u ON h.id_usuario_relacionado = u.id_usuario
+      LEFT JOIN auditoria_evidencias e ON h.id_hallazgo = e.id_hallazgo
+      GROUP BY
+        h.id_hallazgo,
+        r.codigo_regla,
+        r.nombre_regla,
+        h.modulo_origen,
+        h.referencia_id,
+        h.tipo_irregularidad,
+        h.descripcion,
+        h.nivel_riesgo,
+        h.estado,
+        h.fecha_evento,
+        h.fecha_deteccion,
+        u.usuario
+      ORDER BY h.id_hallazgo DESC
+      LIMIT 10
+    `);
+
+    // ========================================================
+    // 9. Hallazgos críticos pendientes
+    // ========================================================
+    const [criticosPendientes] = await pool.query(`
+      SELECT
+        h.id_hallazgo,
+        r.codigo_regla,
+        r.nombre_regla,
+        h.modulo_origen,
+        h.tipo_irregularidad,
+        h.descripcion,
+        h.nivel_riesgo,
+        h.estado,
+        h.fecha_deteccion
+      FROM auditoria_hallazgos h
+      INNER JOIN auditoria_reglas r ON h.id_regla = r.id_regla
+      WHERE h.estado IN ('Pendiente', 'En revision')
+        AND h.nivel_riesgo IN ('Alto', 'Medio')
+      ORDER BY 
+        CASE h.nivel_riesgo
+          WHEN 'Alto' THEN 1
+          WHEN 'Medio' THEN 2
+          ELSE 3
+        END,
+        h.fecha_deteccion DESC
       LIMIT 10
     `);
 
     return res.json({
       ok: true,
       resumen: {
-        total_hallazgos: totalHallazgos[0].total,
-        por_estado: porEstado,
-        por_riesgo: porRiesgo,
-        por_regla: porRegla,
-        ultimos_hallazgos: ultimosHallazgos
-      }
+        total_hallazgos: Number(resumenGeneral[0].total_hallazgos || 0),
+        pendientes: Number(resumenGeneral[0].pendientes || 0),
+        en_revision: Number(resumenGeneral[0].en_revision || 0),
+        confirmados: Number(resumenGeneral[0].confirmados || 0),
+        descartados: Number(resumenGeneral[0].descartados || 0),
+        corregidos: Number(resumenGeneral[0].corregidos || 0),
+        riesgo_alto: Number(resumenGeneral[0].riesgo_alto || 0),
+        riesgo_medio: Number(resumenGeneral[0].riesgo_medio || 0),
+        riesgo_bajo: Number(resumenGeneral[0].riesgo_bajo || 0),
+        riesgo_informativo: Number(resumenGeneral[0].riesgo_informativo || 0),
+        hallazgos_ultimas_24h: Number(resumenGeneral[0].hallazgos_ultimas_24h || 0)
+      },
+      tiempo_deteccion: {
+        promedio_horas: Number(tiempoDeteccion[0].promedio_horas || 0),
+        minimo_horas: Number(tiempoDeteccion[0].minimo_horas || 0),
+        maximo_horas: Number(tiempoDeteccion[0].maximo_horas || 0)
+      },
+      por_estado: porEstado,
+      por_riesgo: porRiesgo,
+      por_regla: porRegla,
+      por_modulo: porModulo,
+      reglas_activas: reglasActivas,
+      ultimos_hallazgos: ultimosHallazgos,
+      criticos_pendientes: criticosPendientes
     });
-
   } catch (error) {
-    console.error('Error al obtener resumen de auditoría:', error);
+    console.error('Error al obtener resumen dashboard auditoría:', error);
 
     return res.status(500).json({
       ok: false,
