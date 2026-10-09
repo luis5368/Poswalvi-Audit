@@ -1,0 +1,24 @@
+{
+  "name": "poswalvi-frontend",
+  "version": "1.0.0",
+  "description": "Frontend POSWALVI V1.3",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^latest",
+    "axios": "^latest",
+    "lucide-react": "^latest",
+    "react": "^latest",
+    "react-dom": "^latest",
+    "react-router-dom": "^latest",
+    "sweetalert2": "^latest",
+    "vite": "^latest"
+  },
+  "devDependencies": {
+    "eslint": "^latest"
+  }
+}

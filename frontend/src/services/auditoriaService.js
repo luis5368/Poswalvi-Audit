@@ -1,43 +1,16 @@
-import axios from 'axios';
-
-const API_URL = 'http://localhost:3001/api';
-
-const getToken = () => {
-  return localStorage.getItem('token');
-};
-
-const authHeaders = () => {
-  return {
-    headers: {
-      Authorization: `Bearer ${getToken()}`
-    }
-  };
-};
+import api from './api';
 
 export const obtenerResumenAuditoria = async () => {
-  const response = await axios.get(
-    `${API_URL}/auditoria/dashboard/resumen`,
-    authHeaders()
-  );
-
-  return response.data;
-};
-
-export const obtenerHallazgos = async () => {
-  const response = await axios.get(
-    `${API_URL}/auditoria/hallazgos`,
-    authHeaders()
-  );
-
+  const response = await api.get('/auditoria/dashboard/resumen');
   return response.data;
 };
 
 export const ejecutarMotorAuditoria = async () => {
-  const response = await axios.post(
-    `${API_URL}/auditoria/ejecutar/todas`,
-    {},
-    authHeaders()
-  );
+  const response = await api.post('/auditoria/ejecutar/todas');
+  return response.data;
+};
 
+export const obtenerDetalleHallazgo = async (idHallazgo) => {
+  const response = await api.get(`/auditoria/hallazgos/${idHallazgo}/detalle`);
   return response.data;
 };

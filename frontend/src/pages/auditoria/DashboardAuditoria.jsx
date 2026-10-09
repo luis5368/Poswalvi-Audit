@@ -1,31 +1,62 @@
 import { useEffect, useState } from 'react';
-import Swal from 'sweetalert2';
 import {
-  obtenerResumenAuditoria,
-  ejecutarMotorAuditoria
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  FileSearch,
+  PlayCircle,
+  ShieldAlert,
+  ShieldCheck,
+  Timer,
+  TrendingUp
+} from 'lucide-react';
+import Swal from 'sweetalert2';
+import MainLayout from '../../components/layout/MainLayout';
+import {
+  ejecutarMotorAuditoria,
+  obtenerResumenAuditoria
 } from '../../services/auditoriaService';
+import './auditoria.css';
+
+const normalizarClase = (texto) => {
+  return String(texto || '')
+    .toLowerCase()
+    .replaceAll(' ', '-')
+    .replaceAll('ó', 'o')
+    .replaceAll('í', 'i');
+};
+
+const formatFecha = (fecha) => {
+  if (!fecha) return '-';
+
+  return new Date(fecha).toLocaleString('es-GT', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  });
+};
+
+const formatTiempo = (horas) => {
+  if (horas === null || horas === undefined) return 'No medido';
+  return `${Number(horas).toFixed(0)} h`;
+};
 
 const DashboardAuditoria = () => {
-  const [resumen, setResumen] = useState(null);
+  const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [ejecutando, setEjecutando] = useState(false);
 
-  const cargarResumen = async () => {
+  const cargarDashboard = async () => {
     try {
       setCargando(true);
-
-      const data = await obtenerResumenAuditoria();
-
-      if (data.ok) {
-        setResumen(data.resumen);
-      }
+      const response = await obtenerResumenAuditoria();
+      setData(response);
     } catch (error) {
-      console.error(error);
-
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'No se pudo cargar el resumen de auditoría'
+        title: 'Error al cargar auditoría',
+        text:
+          error.response?.data?.mensaje ||
+          'No se pudo obtener el resumen de auditoría'
       });
     } finally {
       setCargando(false);
@@ -36,25 +67,22 @@ const DashboardAuditoria = () => {
     try {
       setEjecutando(true);
 
-      const resultado = await ejecutarMotorAuditoria();
+      const response = await ejecutarMotorAuditoria();
 
       await Swal.fire({
         icon: 'success',
         title: 'Motor ejecutado',
-        html: `
-          <p><b>Reglas ejecutadas:</b> ${resultado.total_reglas_ejecutadas}</p>
-          <p><b>Hallazgos generados:</b> ${resultado.total_hallazgos_generados}</p>
-        `
+        text: `Reglas ejecutadas: ${response.total_reglas_ejecutadas || 0}. Hallazgos generados: ${response.total_hallazgos_generados || 0}.`
       });
 
-      cargarResumen();
+      await cargarDashboard();
     } catch (error) {
-      console.error(error);
-
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'No se pudo ejecutar el motor de auditoría'
+        title: 'Error al ejecutar auditoría',
+        text:
+          error.response?.data?.mensaje ||
+          'No se pudo ejecutar el motor de auditoría'
       });
     } finally {
       setEjecutando(false);
@@ -62,154 +90,245 @@ const DashboardAuditoria = () => {
   };
 
   useEffect(() => {
-    cargarResumen();
+    cargarDashboard();
   }, []);
 
-  if (cargando) {
-    return (
-      <div className="p-6">
-        <p className="text-gray-600">Cargando dashboard de auditoría...</p>
-      </div>
-    );
-  }
+  const resumen = data?.resumen;
+  const tiempo = data?.tiempo_deteccion;
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
+    <MainLayout>
+      <div className="auditoria-header">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">
-            Dashboard de Auditoría Continua
-          </h1>
-          <p className="text-gray-600">
-            Resumen de hallazgos generados por el motor de auditoría POSWALVI.
+          <h1>Auditoría Continua</h1>
+          <p>
+            Monitoreo automático de ventas, compras, inventario, caja y riesgos
+            operativos.
           </p>
         </div>
 
-        <button
-          onClick={ejecutarMotor}
-          disabled={ejecutando}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-        >
-          {ejecutando ? 'Ejecutando...' : 'Ejecutar motor'}
-        </button>
-      </div>
+        <div className="auditoria-actions">
+          <button className="secondary-button" onClick={cargarDashboard}>
+            Actualizar
+          </button>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-5 rounded-xl shadow">
-          <p className="text-gray-500">Total de hallazgos</p>
-          <h2 className="text-4xl font-bold text-gray-800">
-            {resumen?.total_hallazgos || 0}
-          </h2>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl shadow">
-          <p className="text-gray-500">Estados registrados</p>
-          <h2 className="text-4xl font-bold text-gray-800">
-            {resumen?.por_estado?.length || 0}
-          </h2>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl shadow">
-          <p className="text-gray-500">Reglas con hallazgos</p>
-          <h2 className="text-4xl font-bold text-gray-800">
-            {resumen?.por_regla?.length || 0}
-          </h2>
+          <button
+            className="primary-button"
+            onClick={ejecutarMotor}
+            disabled={ejecutando}
+          >
+            <PlayCircle size={18} />
+            {ejecutando ? 'Ejecutando...' : 'Ejecutar motor'}
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white p-5 rounded-xl shadow">
-          <h3 className="text-xl font-bold mb-4">Hallazgos por estado</h3>
-
-          {resumen?.por_estado?.map((item) => (
-            <div
-              key={item.estado}
-              className="flex justify-between border-b py-2"
-            >
-              <span>{item.estado}</span>
-              <strong>{item.total}</strong>
+      {cargando ? (
+        <div className="audit-loading">
+          Cargando dashboard de auditoría...
+        </div>
+      ) : (
+        <>
+          <section className="audit-kpi-grid">
+            <div className="audit-kpi-card">
+              <div className="audit-kpi-icon blue">
+                <FileSearch size={26} />
+              </div>
+              <span>Total hallazgos</span>
+              <h2>{resumen?.total_hallazgos || 0}</h2>
+              <small>{resumen?.hallazgos_ultimas_24h || 0} en últimas 24 horas</small>
             </div>
-          ))}
-        </div>
 
-        <div className="bg-white p-5 rounded-xl shadow">
-          <h3 className="text-xl font-bold mb-4">Hallazgos por riesgo</h3>
-
-          {resumen?.por_riesgo?.map((item) => (
-            <div
-              key={item.nivel_riesgo}
-              className="flex justify-between border-b py-2"
-            >
-              <span>{item.nivel_riesgo}</span>
-              <strong>{item.total}</strong>
+            <div className="audit-kpi-card">
+              <div className="audit-kpi-icon orange">
+                <Clock size={26} />
+              </div>
+              <span>Pendientes</span>
+              <h2>{resumen?.pendientes || 0}</h2>
+              <small>{resumen?.en_revision || 0} en revisión</small>
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="bg-white p-5 rounded-xl shadow mb-6">
-        <h3 className="text-xl font-bold mb-4">Hallazgos por regla</h3>
+            <div className="audit-kpi-card">
+              <div className="audit-kpi-icon red">
+                <ShieldAlert size={26} />
+              </div>
+              <span>Riesgo alto</span>
+              <h2>{resumen?.riesgo_alto || 0}</h2>
+              <small>{resumen?.riesgo_medio || 0} de riesgo medio</small>
+            </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-200 text-left">
-                <th className="p-3">Regla</th>
-                <th className="p-3">Módulo</th>
-                <th className="p-3">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumen?.por_regla?.map((item) => (
-                <tr key={`${item.codigo_regla}-${item.modulo_origen}`} className="border-b">
-                  <td className="p-3">
-                    <div className="font-semibold">{item.codigo_regla}</div>
-                    <div className="text-sm text-gray-500">
-                      {item.nombre_regla}
+            <div className="audit-kpi-card">
+              <div className="audit-kpi-icon green">
+                <Timer size={26} />
+              </div>
+              <span>Tiempo promedio</span>
+              <h2>{formatTiempo(tiempo?.promedio_horas)}</h2>
+              <small>Detección de irregularidades</small>
+            </div>
+          </section>
+
+          <section className="audit-grid">
+            <div className="audit-panel large">
+              <div className="audit-panel-header">
+                <h3>Últimos hallazgos</h3>
+                <span>Con evidencia registrada</span>
+              </div>
+
+              <div className="audit-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Regla</th>
+                      <th>Módulo</th>
+                      <th>Riesgo</th>
+                      <th>Estado</th>
+                      <th>Evidencias</th>
+                      <th>Detección</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.ultimos_hallazgos || []).map((hallazgo) => (
+                      <tr key={hallazgo.id_hallazgo}>
+                        <td>AUD-{String(hallazgo.id_hallazgo).padStart(4, '0')}</td>
+                        <td>{hallazgo.codigo_regla}</td>
+                        <td>{hallazgo.modulo_origen}</td>
+                        <td>
+                          <span className={`risk ${normalizarClase(hallazgo.nivel_riesgo)}`}>
+                            {hallazgo.nivel_riesgo}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`audit-status ${normalizarClase(hallazgo.estado)}`}>
+                            {hallazgo.estado}
+                          </span>
+                        </td>
+                        <td>{hallazgo.total_evidencias || 0}</td>
+                        <td>{formatFecha(hallazgo.fecha_deteccion)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="audit-panel">
+              <div className="audit-panel-header">
+                <h3>Distribución por riesgo</h3>
+                <span>Clasificación actual</span>
+              </div>
+
+              <div className="risk-list">
+                {(data?.por_riesgo || []).map((item) => (
+                  <div key={item.nivel_riesgo}>
+                    <span className={`risk-dot ${normalizarClase(item.nivel_riesgo)}`} />
+                    <p>{item.nivel_riesgo}</p>
+                    <strong>{item.total}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="audit-panel">
+              <div className="audit-panel-header">
+                <h3>Hallazgos por estado</h3>
+                <span>Flujo de revisión</span>
+              </div>
+
+              <div className="state-list">
+                {(data?.por_estado || []).map((item) => (
+                  <div key={item.estado}>
+                    <span>{item.estado}</span>
+                    <strong>{item.total}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="audit-panel large">
+              <div className="audit-panel-header">
+                <h3>Hallazgos por regla</h3>
+                <span>Reglas con mayor incidencia</span>
+              </div>
+
+              <div className="rule-list">
+                {(data?.por_regla || []).map((item) => (
+                  <div className="rule-item" key={item.codigo_regla}>
+                    <div>
+                      <strong>{item.codigo_regla}</strong>
+                      <span>{item.nombre_regla}</span>
                     </div>
-                  </td>
-                  <td className="p-3">{item.modulo_origen}</td>
-                  <td className="p-3 font-bold">{item.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      <div className="bg-white p-5 rounded-xl shadow">
-        <h3 className="text-xl font-bold mb-4">Últimos hallazgos</h3>
+                    <div className="rule-metrics">
+                      <small>{item.modulo}</small>
+                      <b>{item.total}</b>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-200 text-left">
-                <th className="p-3">ID</th>
-                <th className="p-3">Irregularidad</th>
-                <th className="p-3">Módulo</th>
-                <th className="p-3">Riesgo</th>
-                <th className="p-3">Estado</th>
-                <th className="p-3">Tiempo detección</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumen?.ultimos_hallazgos?.map((hallazgo) => (
-                <tr key={hallazgo.id_hallazgo} className="border-b">
-                  <td className="p-3">{hallazgo.id_hallazgo}</td>
-                  <td className="p-3">{hallazgo.tipo_irregularidad}</td>
-                  <td className="p-3">{hallazgo.modulo_origen}</td>
-                  <td className="p-3">{hallazgo.nivel_riesgo}</td>
-                  <td className="p-3">{hallazgo.estado}</td>
-                  <td className="p-3">
-                    {hallazgo.tiempo_deteccion_minutos} min
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+            <div className="audit-panel">
+              <div className="audit-panel-header">
+                <h3>Críticos pendientes</h3>
+                <span>Prioridad de revisión</span>
+              </div>
+
+              <div className="critical-audit-list">
+                {(data?.criticos_pendientes || []).map((item) => (
+                  <div key={item.id_hallazgo}>
+                    <AlertTriangle size={18} />
+                    <div>
+                      <strong>{item.codigo_regla}</strong>
+                      <span>{item.tipo_irregularidad}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {(data?.criticos_pendientes || []).length === 0 && (
+                  <div className="empty-audit">
+                    No hay críticos pendientes.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="audit-panel">
+              <div className="audit-panel-header">
+                <h3>Estado de auditoría</h3>
+                <span>Resumen ejecutivo</span>
+              </div>
+
+              <div className="audit-summary-list">
+                <div>
+                  <ShieldCheck size={20} />
+                  <span>Confirmados</span>
+                  <strong>{resumen?.confirmados || 0}</strong>
+                </div>
+
+                <div>
+                  <CheckCircle2 size={20} />
+                  <span>Corregidos</span>
+                  <strong>{resumen?.corregidos || 0}</strong>
+                </div>
+
+                <div>
+                  <TrendingUp size={20} />
+                  <span>Reglas activas</span>
+                  <strong>{data?.reglas_activas?.length || 0}</strong>
+                </div>
+
+                <div>
+                  <Clock size={20} />
+                  <span>Máximo detección</span>
+                  <strong>{formatTiempo(tiempo?.maximo_horas)}</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+    </MainLayout>
   );
 };
 
