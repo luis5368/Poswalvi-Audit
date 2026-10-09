@@ -5,6 +5,7 @@ import CambiarPassword from '../pages/auth/CambiarPassword';
 import DashboardAdmin from '../pages/dashboard/DashboardAdmin';
 import DashboardAuditoria from '../pages/auditoria/DashboardAuditoria';
 import Usuarios from '../pages/usuarios/Usuarios';
+import Clientes from '../pages/clientes/Clientes';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -91,6 +92,14 @@ const AppRouter = () => {
         element={
           <RutaPrivadaNormal>
             <Usuarios />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/clientes"
+        element={
+          <RutaPrivadaNormal>
+            <Clientes />
           </RutaPrivadaNormal>
         }
       />
