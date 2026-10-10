@@ -17,6 +17,7 @@ const productoProveedorRoutes = require('./routes/productoProveedorRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
 const dashboardAdminRoutes = require('./routes/dashboardAdminRoutes');
 const usuariosRoutes = require('./routes/usuariosRoutes');
+const catalogosProductosRoutes = require('./routes/catalogosProductosRoutes');
 
 const app = express();
 
@@ -39,11 +40,13 @@ app.use('/api/ventas', ventasRoutes);
 app.use('/api/metodos-pago', metodosPagoRoutes);
 app.use('/api/inventario-saldos', inventarioSaldosRoutes);
 app.use('/api/productos', productosRoutes);
+app.use('/api/catalogos-productos', catalogosProductosRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/proveedores', proveedoresRoutes);
 app.use('/api/producto-proveedor', productoProveedorRoutes);
 app.use('/api/compras', comprasRoutes);
 app.use('/api/dashboard-admin', dashboardAdminRoutes);
 app.use('/api/usuarios', usuariosRoutes);
+
 
 module.exports = app;  

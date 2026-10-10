@@ -6,6 +6,8 @@ import DashboardAdmin from '../pages/dashboard/DashboardAdmin';
 import DashboardAuditoria from '../pages/auditoria/DashboardAuditoria';
 import Usuarios from '../pages/usuarios/Usuarios';
 import Clientes from '../pages/clientes/Clientes';
+import Proveedores from '../pages/proveedores/Proveedores';
+import Productos from '../pages/productos/Productos';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -100,6 +102,22 @@ const AppRouter = () => {
         element={
           <RutaPrivadaNormal>
             <Clientes />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/proveedores"
+        element={
+          <RutaPrivadaNormal>
+            <Proveedores />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/productos"
+        element={
+          <RutaPrivadaNormal>
+            <Productos />
           </RutaPrivadaNormal>
         }
       />

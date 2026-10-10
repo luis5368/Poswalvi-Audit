@@ -12,7 +12,8 @@ import {
   Store,
   Truck,
   Users,
-  WalletCards
+  WalletCards,
+  Tags
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import './layout.css';
@@ -28,7 +29,8 @@ const menuItems = [
   { label: 'Usuarios', icon: Building2, path: '/usuarios' },
   { label: 'Auditoría Continua', icon: ShieldAlert, path: '/auditoria' },
   { label: 'Reportes', icon: FileBarChart, path: '/reportes' },
-  { label: 'Configuración', icon: Settings, path: '/configuracion' }
+  { label: 'Configuración', icon: Settings, path: '/configuracion' },
+  { label: 'Productos', icon: Tags, path: '/productos' }
 ];
 
 const Sidebar = () => {
