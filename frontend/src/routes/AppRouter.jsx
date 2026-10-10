@@ -8,6 +8,7 @@ import Usuarios from '../pages/usuarios/Usuarios';
 import Clientes from '../pages/clientes/Clientes';
 import Proveedores from '../pages/proveedores/Proveedores';
 import Productos from '../pages/productos/Productos';
+import Inventario from '../pages/inventario/Inventario';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -118,6 +119,14 @@ const AppRouter = () => {
         element={
           <RutaPrivadaNormal>
             <Productos />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/inventario"
+        element={
+          <RutaPrivadaNormal>
+            <Inventario />
           </RutaPrivadaNormal>
         }
       />
