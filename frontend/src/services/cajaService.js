@@ -41,3 +41,27 @@ export const cerrarTurno = async (idTurno, datos) => {
 
   return response.data;
 };
+
+
+export const crearCaja = async (datos) => {
+  const response = await api.post('/cajas', datos);
+  return response.data;
+};
+
+export const actualizarCaja = async (idCaja, datos) => {
+  const response = await api.put(`/cajas/${idCaja}`, datos);
+  return response.data;
+};
+
+export const cambiarEstadoCaja = async (idCaja, datos) => {
+  const response = await api.patch(
+    `/cajas/${idCaja}/estado`,
+    datos
+  );
+  return response.data;
+};
+
+export const obtenerSucursalesCaja = async (params = {}) => {
+  const response = await api.get('/sucursales', { params });
+  return response.data;
+};

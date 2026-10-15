@@ -952,3 +952,129 @@
     transform: none;
   }
 }
+
+
+/* =========================================================
+   ADMINISTRACIÓN DE CAJAS
+========================================================= */
+
+.caja-admin {
+  margin: 0 0 20px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, .13);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, .84);
+}
+
+.caja-admin-cabecera,
+.caja-admin-resumen {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.caja-admin-cabecera h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 7px;
+  color: #e0f2fe;
+  font-size: 18px;
+}
+
+.caja-admin-cabecera p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.caja-admin-cabecera > button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(56, 189, 248, .3);
+  border-radius: 11px;
+  color: #bae6fd;
+  background: rgba(14, 165, 233, .12);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.caja-admin-cabecera > button:hover {
+  background: rgba(14, 165, 233, .2);
+}
+
+.caja-admin-contenido {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, .12);
+}
+
+.caja-admin-resumen {
+  margin-bottom: 15px;
+}
+
+.caja-admin-resumen span {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.caja-admin-estado {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.caja-admin-estado.activo {
+  color: #86efac;
+  background: rgba(34, 197, 94, .14);
+}
+
+.caja-admin-estado.inactivo {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, .14);
+}
+
+.caja-admin-aviso {
+  display: block;
+  margin: 10px 0 15px;
+  color: #fdba74;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.caja-admin .caja-tabla-wrap table {
+  min-width: 820px;
+}
+
+.caja-admin .caja-acciones-tabla button:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+.caja-admin .caja-form label svg {
+  display: inline;
+  vertical-align: middle;
+}
+
+@media (max-width: 680px) {
+  .caja-admin {
+    padding: 14px;
+  }
+
+  .caja-admin-cabecera {
+    align-items: stretch;
+  }
+
+  .caja-admin-cabecera > button {
+    width: 100%;
+  }
+
+  .caja-admin-resumen .caja-btn-primary {
+    width: 100%;
+  }
+}

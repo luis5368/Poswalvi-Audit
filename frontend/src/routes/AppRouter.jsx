@@ -150,7 +150,7 @@ const AppRouter = () => {
         }
       />
       <Route
-        path="/caja-turnos"
+        path="/caja"
         element={
           <RutaPrivadaNormal>
             <CajaTurnos />
