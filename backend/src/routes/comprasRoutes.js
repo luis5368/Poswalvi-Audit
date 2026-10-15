@@ -8,7 +8,8 @@ const {
   obtenerCompras,
   obtenerCompraPorId,
   crearCompra,
-  anularCompra
+  anularCompra,
+  obtenerConfiguracionIva
 } = require('../controllers/comprasController');
 
 // Listar compras
@@ -41,6 +42,13 @@ router.patch(
   verificarToken,
   verificarPermiso('Compras', 'Anular'),
   anularCompra
+);
+
+router.get(
+  '/configuracion/iva',
+  verificarToken,
+  verificarPermiso('Compras', 'Consultar'),
+  obtenerConfiguracionIva
 );
 
 module.exports = router;

@@ -1,0 +1,871 @@
+
+/* ============================================================
+   POSWALVI V1.3 - MÓDULO DE COMPRAS
+   Diseño oscuro, responsive y consistente con el sistema
+============================================================ */
+
+/* ENCABEZADO */
+
+.compras-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.compras-header h1 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.compras-header p {
+  margin: 7px 0 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.compras-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compras-actions button,
+.compras-toolbar button {
+  min-height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+
+  background: rgba(14, 165, 233, 0.12);
+  color: #bae6fd;
+
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.compras-actions button:hover,
+.compras-toolbar button:hover {
+  background: rgba(14, 165, 233, 0.22);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.compras-actions .compras-primary,
+.compra-modal-acciones .compras-primary {
+  border: none;
+  color: white;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+}
+
+.compras-actions .compras-primary:hover,
+.compra-modal-acciones .compras-primary:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+}
+
+/* ============================================================
+   TARJETAS KPI
+============================================================ */
+
+.compras-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.compras-card {
+  min-width: 0;
+  min-height: 160px;
+  padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 165, 233, 0.06),
+      transparent
+    ),
+    rgba(15, 23, 42, 0.84);
+
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease;
+}
+
+.compras-card:hover {
+  transform: translateY(-2px);
+}
+
+.compras-card svg {
+  width: 46px;
+  height: 46px;
+  padding: 11px;
+  margin-bottom: 15px;
+  border-radius: 14px;
+
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.13);
+}
+
+.compras-card:nth-child(2) svg {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.13);
+}
+
+.compras-card:nth-child(3) svg {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.13);
+}
+
+.compras-card:nth-child(4) svg {
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.13);
+}
+
+.compras-card span {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.compras-card strong {
+  display: block;
+  margin: 9px 0 5px;
+
+  color: #7dd3fc;
+  font-size: 28px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.compras-card small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* ============================================================
+   BÚSQUEDA
+============================================================ */
+
+.compras-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  margin-bottom: 18px;
+  padding: 16px;
+
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.compras-search {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 0 14px;
+  border-radius: 14px;
+
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.compras-search svg {
+  flex-shrink: 0;
+  color: #38bdf8;
+}
+
+.compras-search input {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+
+  border: none;
+  outline: none;
+  background: transparent;
+
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.compras-search input::placeholder {
+  color: #64748b;
+}
+
+/* ============================================================
+   PANEL DE COMPRAS
+============================================================ */
+
+.compras-panel {
+  padding: 20px;
+
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.compras-panel h3 {
+  margin: 0 0 5px;
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.compras-panel > small {
+  display: block;
+  margin-bottom: 18px;
+
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* ============================================================
+   TABLAS
+============================================================ */
+
+.compras-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 14px;
+}
+
+.compras-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.compras-panel > .compras-table-wrap table {
+  min-width: 950px;
+}
+
+.compras-table-wrap thead {
+  background: rgba(2, 6, 23, 0.18);
+}
+
+.compras-table-wrap th {
+  padding: 13px 12px;
+
+  text-align: left;
+  white-space: nowrap;
+
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 800;
+
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.compras-table-wrap td {
+  padding: 14px 12px;
+
+  color: #e2e8f0;
+  font-size: 13px;
+  vertical-align: middle;
+
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.compras-table-wrap tbody tr {
+  transition: background 0.15s ease;
+}
+
+.compras-table-wrap tbody tr:hover {
+  background: rgba(56, 189, 248, 0.045);
+}
+
+.compras-table-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.compras-table-wrap td strong {
+  display: block;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.compras-table-wrap td small {
+  display: block;
+  margin-top: 4px;
+
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.compras-vacio {
+  padding: 30px !important;
+  text-align: center;
+  color: #94a3b8 !important;
+}
+
+/* ============================================================
+   ESTADOS DE COMPRA
+============================================================ */
+
+.compra-estado {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 26px;
+  padding: 4px 11px;
+
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.compra-estado.registrada {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.compra-estado.anulada {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+/* ============================================================
+   BOTONES DE TABLA
+============================================================ */
+
+.compras-acciones-tabla {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compras-acciones-tabla button,
+.compra-seccion .compras-table-wrap button {
+  width: 34px;
+  height: 34px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+
+  background: rgba(2, 6, 23, 0.55);
+  color: #bae6fd;
+  cursor: pointer;
+
+  transition: all 0.2s ease;
+}
+
+.compras-acciones-tabla button:hover,
+.compra-seccion .compras-table-wrap button:hover {
+  background: rgba(14, 165, 233, 0.18);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.compras-acciones-tabla button[title="Anular compra"] {
+  color: #fca5a5;
+}
+
+.compras-acciones-tabla button[title="Anular compra"]:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================================
+   FONDO DE MODALES
+============================================================ */
+
+.compra-modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+  overflow-y: auto;
+
+  background: rgba(2, 6, 23, 0.76);
+  backdrop-filter: blur(8px);
+}
+
+/* ============================================================
+   MODAL NUEVA COMPRA
+============================================================ */
+
+.compra-modal {
+  width: min(1120px, 100%);
+  max-height: 92vh;
+
+  overflow-y: auto;
+  border-radius: 24px;
+
+  background: #07111f;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+.compra-modal-detalle {
+  width: min(850px, 100%);
+}
+
+.compra-modal-titulo {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  min-height: 72px;
+  padding: 0 24px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+
+  background: rgba(7, 17, 31, 0.97);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.compra-modal-titulo h2 {
+  margin: 0;
+
+  color: #f8fafc;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.compra-modal-titulo button {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+
+  border: none;
+  border-radius: 12px;
+
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.compra-modal-titulo button:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* ============================================================
+   FORMULARIO
+============================================================ */
+
+.compra-form {
+  padding: 24px;
+}
+
+.compra-seccion {
+  margin-bottom: 22px;
+  padding: 18px;
+
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.compra-seccion h3 {
+  margin: 0 0 18px;
+
+  color: #e0f2fe;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.compra-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.compra-campo-completo {
+  grid-column: 1 / -1;
+}
+
+.compra-form label {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compra-form input,
+.compra-form select {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+
+  padding: 0 12px;
+
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  outline: none;
+
+  background: rgba(2, 6, 23, 0.62);
+  color: #f8fafc;
+
+  font-size: 13px;
+  transition: border-color 0.2s ease;
+}
+
+.compra-form input:focus,
+.compra-form select:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.compra-form input::placeholder {
+  color: #64748b;
+}
+
+.compra-form input:disabled,
+.compra-form select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.compra-form select option {
+  color: #f8fafc;
+  background: #07111f;
+}
+
+/* ============================================================
+   AGREGAR PRODUCTOS
+============================================================ */
+
+.compra-agregar-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) 0.7fr 1fr auto;
+  align-items: end;
+  gap: 14px;
+
+  margin-bottom: 18px;
+}
+
+.compra-agregar-grid > button {
+  min-height: 44px;
+  padding: 0 18px;
+
+  border: none;
+  border-radius: 12px;
+
+  color: white;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.compra-agregar-grid > button:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+}
+
+.compra-seccion .compras-table-wrap {
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.compra-seccion .compras-table-wrap table {
+  min-width: 550px;
+}
+
+/* ============================================================
+   RESUMEN DE COMPRA
+============================================================ */
+
+.compra-seccion > label {
+  max-width: 280px;
+  margin-bottom: 18px;
+}
+
+.compra-resumen {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.compra-resumen > div {
+  min-height: 85px;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+
+  padding: 14px;
+  border-radius: 15px;
+
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.compra-resumen span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.compra-resumen strong {
+  color: #e0f2fe;
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.compra-resumen .compra-total {
+  background: rgba(34, 197, 94, 0.09);
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.compra-resumen .compra-total span {
+  color: #bbf7d0;
+}
+
+.compra-resumen .compra-total strong {
+  color: #86efac;
+  font-size: 24px;
+}
+
+/* ============================================================
+   ACCIONES DEL MODAL
+============================================================ */
+
+.compra-modal-acciones {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+
+  margin-top: 24px;
+}
+
+.compra-modal-acciones button {
+  min-height: 44px;
+  padding: 0 20px;
+
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.compra-modal-acciones button:hover {
+  filter: brightness(1.12);
+}
+
+.compra-modal-acciones button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   DETALLE DE COMPRA
+============================================================ */
+
+.compra-modal-detalle .compra-form {
+  padding: 24px;
+}
+
+.compra-modal-detalle .compra-grid {
+  margin-bottom: 22px;
+  padding: 18px;
+
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.compra-modal-detalle .compra-grid p {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.compra-modal-detalle .compra-grid strong {
+  color: #7dd3fc;
+}
+
+/* ============================================================
+   SCROLL PERSONALIZADO
+============================================================ */
+
+.compra-modal::-webkit-scrollbar,
+.compras-table-wrap::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.compra-modal::-webkit-scrollbar-track,
+.compras-table-wrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 8px;
+}
+
+.compra-modal::-webkit-scrollbar-thumb,
+.compras-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 8px;
+}
+
+/* ============================================================
+   RESPONSIVE - TABLET
+============================================================ */
+
+@media (max-width: 1250px) {
+  .compras-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compra-agregar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compra-agregar-grid > button {
+    grid-column: 1 / -1;
+  }
+
+  .compra-resumen {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - PANTALLAS MEDIANAS
+============================================================ */
+
+@media (max-width: 850px) {
+  .compras-header,
+  .compras-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compras-actions {
+    width: 100%;
+  }
+
+  .compras-actions button {
+    flex: 1;
+  }
+
+  .compras-toolbar button {
+    width: 100%;
+  }
+
+  .compra-modal-fondo {
+    padding: 12px;
+  }
+
+  .compra-modal {
+    max-height: 95vh;
+  }
+
+  .compra-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compra-campo-completo {
+    grid-column: auto;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - MÓVIL
+============================================================ */
+
+@media (max-width: 600px) {
+  .compras-header h1 {
+    font-size: 26px;
+  }
+
+  .compras-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .compras-card {
+    min-height: 135px;
+  }
+
+  .compras-toolbar,
+  .compras-panel {
+    padding: 14px;
+  }
+
+  .compra-modal-titulo {
+    padding: 0 16px;
+  }
+
+  .compra-modal-titulo h2 {
+    font-size: 19px;
+  }
+
+  .compra-form {
+    padding: 14px;
+  }
+
+  .compra-seccion {
+    padding: 14px;
+  }
+
+  .compra-agregar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compra-agregar-grid > button {
+    grid-column: auto;
+  }
+
+  .compra-resumen {
+    grid-template-columns: 1fr;
+  }
+
+  .compra-modal-acciones {
+    flex-direction: column;
+  }
+
+  .compra-modal-acciones button {
+    width: 100%;
+  }
+
+  .compra-modal-detalle .compra-grid {
+    grid-template-columns: 1fr;
+  }
+}

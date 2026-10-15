@@ -1021,9 +1021,34 @@ const anularCompra = async (req, res) => {
   }
 };
 
+const obtenerConfiguracionIva = async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT porcentaje_iva
+      FROM empresa_configuracion
+      WHERE estado = 'Activa'
+      ORDER BY id_empresa ASC
+      LIMIT 1
+    `);
+
+    return res.json({
+      ok: true,
+      porcentaje_iva: Number(rows[0]?.porcentaje_iva || 12)
+    });
+  } catch (error) {
+    console.error('Error al obtener IVA:', error);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al obtener configuración de IVA'
+    });
+  }
+};
+
 module.exports = {
   obtenerCompras,
   obtenerCompraPorId,
   crearCompra,
+  obtenerConfiguracionIva,
   anularCompra
 };

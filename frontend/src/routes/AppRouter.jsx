@@ -10,6 +10,7 @@ import Proveedores from '../pages/proveedores/Proveedores';
 import Productos from '../pages/productos/Productos';
 import Inventario from '../pages/inventario/Inventario';
 import Ventas from '../pages/ventas/Ventas';
+import Compras from '../pages/compras/Compras';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -136,6 +137,14 @@ const AppRouter = () => {
         element={
           <RutaPrivadaNormal>
             <Ventas />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/compras"
+        element={
+          <RutaPrivadaNormal>
+            <Compras />
           </RutaPrivadaNormal>
         }
       />
