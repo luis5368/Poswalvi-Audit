@@ -11,6 +11,7 @@ import Productos from '../pages/productos/Productos';
 import Inventario from '../pages/inventario/Inventario';
 import Ventas from '../pages/ventas/Ventas';
 import Compras from '../pages/compras/Compras';
+import CajaTurnos from '../pages/caja/CajaTurnos';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -145,6 +146,14 @@ const AppRouter = () => {
         element={
           <RutaPrivadaNormal>
             <Compras />
+          </RutaPrivadaNormal>
+        }
+      />
+      <Route
+        path="/caja-turnos"
+        element={
+          <RutaPrivadaNormal>
+            <CajaTurnos />
           </RutaPrivadaNormal>
         }
       />

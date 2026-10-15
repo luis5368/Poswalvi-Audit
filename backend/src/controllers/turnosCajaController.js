@@ -1,9 +1,40 @@
+
 const pool = require('../config/db');
 
 // ============================================================
-// GET /api/turnos-caja
-// Listar turnos de caja
+// FUNCIONES AUXILIARES
 // ============================================================
+
+const importeValido = (valor) => {
+  if (
+    valor === undefined ||
+    valor === null ||
+    String(valor).trim() === ''
+  ) {
+    return false;
+  }
+
+  const numero = Number(valor);
+
+  return (
+    Number.isFinite(numero) &&
+    numero >= 0 &&
+    numero <= 99999999.99 &&
+    Math.abs(numero * 100 - Math.round(numero * 100)) < 0.000001
+  );
+};
+
+const redondear2 = (valor) => {
+  return Math.round(
+    (Number(valor) + Number.EPSILON) * 100
+  ) / 100;
+};
+
+// ============================================================
+// GET /api/turnos-caja
+// LISTAR TURNOS
+// ============================================================
+
 const obtenerTurnosCaja = async (req, res) => {
   try {
     const {
@@ -71,8 +102,9 @@ const obtenerTurnosCaja = async (req, res) => {
       total: rows.length,
       turnos: rows
     });
+
   } catch (error) {
-    console.error('Error al obtener turnos de caja:', error);
+    console.error('Error al obtener turnos:', error);
 
     return res.status(500).json({
       ok: false,
@@ -83,8 +115,9 @@ const obtenerTurnosCaja = async (req, res) => {
 
 // ============================================================
 // GET /api/turnos-caja/activo
-// Obtener turno activo del usuario autenticado o por caja
+// CONSULTAR TURNO ACTIVO
 // ============================================================
+
 const obtenerTurnoActivo = async (req, res) => {
   try {
     const { id_caja } = req.query;
@@ -138,6 +171,7 @@ const obtenerTurnoActivo = async (req, res) => {
       tiene_turno_activo: true,
       turno: rows[0]
     });
+
   } catch (error) {
     console.error('Error al obtener turno activo:', error);
 
@@ -150,8 +184,9 @@ const obtenerTurnoActivo = async (req, res) => {
 
 // ============================================================
 // GET /api/turnos-caja/:id
-// Obtener turno por ID
+// CONSULTAR TURNO POR ID
 // ============================================================
+
 const obtenerTurnoPorId = async (req, res) => {
   try {
     const { id } = req.params;
@@ -197,6 +232,7 @@ const obtenerTurnoPorId = async (req, res) => {
       ok: true,
       turno: rows[0]
     });
+
   } catch (error) {
     console.error('Error al obtener turno por ID:', error);
 
@@ -209,8 +245,9 @@ const obtenerTurnoPorId = async (req, res) => {
 
 // ============================================================
 // POST /api/turnos-caja/aperturar
-// Aperturar turno de caja
+// APERTURAR TURNO DE CAJA
 // ============================================================
+
 const aperturarTurnoCaja = async (req, res) => {
   const connection = await pool.getConnection();
 
@@ -225,25 +262,68 @@ const aperturarTurnoCaja = async (req, res) => {
       observaciones
     } = req.body;
 
-    if (!id_caja) {
+    const idCaja = Number(id_caja);
+
+    // --------------------------------------------------------
+    // VALIDACIÓN DE CAJA
+    // --------------------------------------------------------
+
+    if (
+      !Number.isSafeInteger(idCaja) ||
+      idCaja <= 0
+    ) {
       await connection.rollback();
 
       return res.status(400).json({
         ok: false,
-        mensaje: 'La caja es obligatoria'
+        mensaje: 'La caja indicada no es válida'
       });
     }
 
-    const montoApertura = Number(monto_apertura || 0);
+    // --------------------------------------------------------
+    // VALIDACIÓN DEL FONDO DE APERTURA
+    // --------------------------------------------------------
 
-    if (Number.isNaN(montoApertura) || montoApertura < 0) {
+    const aperturaInformada = monto_apertura ?? 0;
+
+    if (!importeValido(aperturaInformada)) {
       await connection.rollback();
 
       return res.status(400).json({
         ok: false,
-        mensaje: 'El monto de apertura debe ser mayor o igual a 0'
+        mensaje:
+          'El monto de apertura debe ser no negativo y tener máximo 2 decimales'
       });
     }
+
+    const montoApertura = redondear2(aperturaInformada);
+
+    // --------------------------------------------------------
+    // BLOQUEAR USUARIO DURANTE LA APERTURA
+    // --------------------------------------------------------
+
+    const [usuarioBloqueado] = await connection.query(
+      `
+      SELECT id_usuario
+      FROM usuarios
+      WHERE id_usuario = ?
+      FOR UPDATE
+      `,
+      [idUsuario]
+    );
+
+    if (usuarioBloqueado.length === 0) {
+      await connection.rollback();
+
+      return res.status(401).json({
+        ok: false,
+        mensaje: 'Usuario no disponible'
+      });
+    }
+
+    // --------------------------------------------------------
+    // VALIDAR CAJA Y SUCURSAL
+    // --------------------------------------------------------
 
     const [caja] = await connection.query(
       `
@@ -255,11 +335,13 @@ const aperturarTurnoCaja = async (req, res) => {
         s.nombre_sucursal,
         s.estado AS estado_sucursal
       FROM cajas c
-      INNER JOIN sucursales s ON c.id_sucursal = s.id_sucursal
+      INNER JOIN sucursales s
+        ON c.id_sucursal = s.id_sucursal
       WHERE c.id_caja = ?
       LIMIT 1
+      FOR UPDATE
       `,
-      [id_caja]
+      [idCaja]
     );
 
     if (caja.length === 0) {
@@ -276,7 +358,8 @@ const aperturarTurnoCaja = async (req, res) => {
 
       return res.status(400).json({
         ok: false,
-        mensaje: 'No se puede aperturar turno en una sucursal inactiva'
+        mensaje:
+          'No se puede aperturar turno en una sucursal inactiva'
       });
     }
 
@@ -285,9 +368,14 @@ const aperturarTurnoCaja = async (req, res) => {
 
       return res.status(400).json({
         ok: false,
-        mensaje: 'No se puede aperturar turno en una caja inactiva'
+        mensaje:
+          'No se puede aperturar turno en una caja inactiva'
       });
     }
+
+    // --------------------------------------------------------
+    // EVITAR DOS TURNOS ABIERTOS EN LA MISMA CAJA
+    // --------------------------------------------------------
 
     const [turnoCajaAbierto] = await connection.query(
       `
@@ -297,7 +385,7 @@ const aperturarTurnoCaja = async (req, res) => {
         AND estado = 'Abierto'
       LIMIT 1
       `,
-      [id_caja]
+      [idCaja]
     );
 
     if (turnoCajaAbierto.length > 0) {
@@ -308,6 +396,10 @@ const aperturarTurnoCaja = async (req, res) => {
         mensaje: 'Esta caja ya tiene un turno abierto'
       });
     }
+
+    // --------------------------------------------------------
+    // EVITAR DOS TURNOS ABIERTOS DEL MISMO USUARIO
+    // --------------------------------------------------------
 
     const [turnoUsuarioAbierto] = await connection.query(
       `
@@ -325,9 +417,14 @@ const aperturarTurnoCaja = async (req, res) => {
 
       return res.status(409).json({
         ok: false,
-        mensaje: 'El usuario ya tiene un turno de caja abierto'
+        mensaje:
+          'El usuario ya tiene un turno de caja abierto'
       });
     }
+
+    // --------------------------------------------------------
+    // REGISTRAR APERTURA
+    // --------------------------------------------------------
 
     const [result] = await connection.query(
       `
@@ -342,10 +439,14 @@ const aperturarTurnoCaja = async (req, res) => {
         estado,
         observaciones
       )
-      VALUES (?, ?, NOW(), ?, 0.00, 0.00, 0.00, 'Abierto', ?)
+      VALUES (
+        ?, ?, NOW(), ?,
+        0.00, 0.00, 0.00,
+        'Abierto', ?
+      )
       `,
       [
-        id_caja,
+        idCaja,
         idUsuario,
         montoApertura,
         observaciones || null
@@ -359,15 +460,17 @@ const aperturarTurnoCaja = async (req, res) => {
       mensaje: 'Turno de caja aperturado correctamente',
       id_turno: result.insertId
     });
+
   } catch (error) {
     await connection.rollback();
 
-    console.error('Error al aperturar turno de caja:', error);
+    console.error('Error al aperturar turno:', error);
 
     return res.status(500).json({
       ok: false,
       mensaje: 'Error interno al aperturar turno de caja'
     });
+
   } finally {
     connection.release();
   }
@@ -375,8 +478,9 @@ const aperturarTurnoCaja = async (req, res) => {
 
 // ============================================================
 // PATCH /api/turnos-caja/:id/cerrar
-// Cerrar turno de caja
+// CERRAR TURNO DE CAJA
 // ============================================================
+
 const cerrarTurnoCaja = async (req, res) => {
   const connection = await pool.getConnection();
 
@@ -390,16 +494,43 @@ const cerrarTurnoCaja = async (req, res) => {
       observaciones
     } = req.body;
 
-    const montoFisico = Number(monto_cierre_fisico);
+    const idTurno = Number(id);
 
-    if (Number.isNaN(montoFisico) || montoFisico < 0) {
+    // --------------------------------------------------------
+    // VALIDAR ID DE TURNO
+    // --------------------------------------------------------
+
+    if (
+      !Number.isSafeInteger(idTurno) ||
+      idTurno <= 0
+    ) {
       await connection.rollback();
 
       return res.status(400).json({
         ok: false,
-        mensaje: 'El monto físico de cierre debe ser mayor o igual a 0'
+        mensaje: 'ID de turno inválido'
       });
     }
+
+    // --------------------------------------------------------
+    // VALIDAR MONTO FÍSICO
+    // --------------------------------------------------------
+
+    if (!importeValido(monto_cierre_fisico)) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        ok: false,
+        mensaje:
+          'El monto físico debe ser no negativo y tener máximo 2 decimales'
+      });
+    }
+
+    const montoFisico = redondear2(monto_cierre_fisico);
+
+    // --------------------------------------------------------
+    // CONSULTAR Y BLOQUEAR TURNO
+    // --------------------------------------------------------
 
     const [turno] = await connection.query(
       `
@@ -412,8 +543,9 @@ const cerrarTurnoCaja = async (req, res) => {
       FROM turnos_caja
       WHERE id_turno = ?
       LIMIT 1
+      FOR UPDATE
       `,
-      [id]
+      [idTurno]
     );
 
     if (turno.length === 0) {
@@ -425,6 +557,27 @@ const cerrarTurnoCaja = async (req, res) => {
       });
     }
 
+    // --------------------------------------------------------
+    // VALIDAR PROPIEDAD DEL TURNO
+    // --------------------------------------------------------
+
+    if (
+      Number(turno[0].id_usuario) !==
+      Number(req.usuario.id_usuario)
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        ok: false,
+        mensaje:
+          'No puede cerrar un turno perteneciente a otro usuario'
+      });
+    }
+
+    // --------------------------------------------------------
+    // VALIDAR ESTADO DEL TURNO
+    // --------------------------------------------------------
+
     if (turno[0].estado !== 'Abierto') {
       await connection.rollback();
 
@@ -434,23 +587,143 @@ const cerrarTurnoCaja = async (req, res) => {
       });
     }
 
-    const [ventasTurno] = await connection.query(
+    // --------------------------------------------------------
+    // VALIDAR CONCILIACIÓN DE PAGOS
+    // --------------------------------------------------------
+
+    const [ventasSinCuadrar] = await connection.query(
       `
-      SELECT COALESCE(SUM(total), 0) AS total_ventas
+      SELECT
+        v.id_venta,
+        v.numero_documento,
+        v.total,
+        COALESCE(SUM(vp.monto), 0) AS total_pagos
+      FROM ventas v
+      LEFT JOIN venta_pagos vp
+        ON vp.id_venta = v.id_venta
+      WHERE v.id_turno = ?
+        AND v.estado = 'Registrada'
+      GROUP BY
+        v.id_venta,
+        v.numero_documento,
+        v.total
+      HAVING
+        ABS(
+          v.total - COALESCE(SUM(vp.monto), 0)
+        ) > 0.01
+      LIMIT 1
+      `,
+      [idTurno]
+    );
+
+    if (ventasSinCuadrar.length > 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje:
+          'No se puede cerrar: existen ventas sin pagos completos',
+        venta: ventasSinCuadrar[0].numero_documento
+      });
+    }
+
+    // --------------------------------------------------------
+    // TOTAL GENERAL DE VENTAS REGISTRADAS
+    // --------------------------------------------------------
+
+    const [resumenVentas] = await connection.query(
+      `
+      SELECT
+        COALESCE(SUM(total), 0) AS total_ventas
       FROM ventas
       WHERE id_turno = ?
         AND estado = 'Registrada'
       `,
-      [id]
+      [idTurno]
     );
 
-    const totalVentas = Number(ventasTurno[0].total_ventas || 0);
-    const montoApertura = Number(turno[0].monto_apertura || 0);
+    // --------------------------------------------------------
+    // SEPARAR EFECTIVO DE OTROS MÉTODOS DE PAGO
+    // --------------------------------------------------------
 
-    const montoSistema = montoApertura + totalVentas;
-    const diferencia = montoFisico - montoSistema;
+    const [resumenPagos] = await connection.query(
+      `
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN LOWER(TRIM(mp.nombre_metodo)) = 'efectivo'
+              THEN vp.monto
+              ELSE 0
+            END
+          ), 0
+        ) AS total_efectivo,
 
-    await connection.query(
+        COALESCE(
+          SUM(
+            CASE
+              WHEN LOWER(TRIM(mp.nombre_metodo)) <> 'efectivo'
+              THEN vp.monto
+              ELSE 0
+            END
+          ), 0
+        ) AS total_otros_metodos
+
+      FROM ventas v
+
+      INNER JOIN venta_pagos vp
+        ON vp.id_venta = v.id_venta
+
+      INNER JOIN metodos_pago mp
+        ON mp.id_metodo_pago = vp.id_metodo_pago
+
+      WHERE v.id_turno = ?
+        AND v.estado = 'Registrada'
+      `,
+      [idTurno]
+    );
+
+    // --------------------------------------------------------
+    // NORMALIZAR IMPORTES
+    // --------------------------------------------------------
+
+    const totalVentas = redondear2(
+      resumenVentas[0].total_ventas || 0
+    );
+
+    const totalEfectivo = redondear2(
+      resumenPagos[0].total_efectivo || 0
+    );
+
+    const totalOtrosMetodos = redondear2(
+      resumenPagos[0].total_otros_metodos || 0
+    );
+
+    const montoApertura = redondear2(
+      turno[0].monto_apertura || 0
+    );
+
+    // --------------------------------------------------------
+    // CALCULAR EFECTIVO ESPERADO
+    // --------------------------------------------------------
+
+    const montoSistema = redondear2(
+      montoApertura + totalEfectivo
+    );
+
+    // --------------------------------------------------------
+    // CALCULAR DIFERENCIA
+    // --------------------------------------------------------
+
+    const diferencia = redondear2(
+      montoFisico - montoSistema
+    );
+
+    // --------------------------------------------------------
+    // REGISTRAR CIERRE
+    // --------------------------------------------------------
+
+    const [resultado] = await connection.query(
       `
       UPDATE turnos_caja
       SET
@@ -461,43 +734,65 @@ const cerrarTurnoCaja = async (req, res) => {
         estado = 'Cerrado',
         observaciones = ?
       WHERE id_turno = ?
+        AND estado = 'Abierto'
       `,
       [
         montoSistema,
         montoFisico,
         diferencia,
         observaciones || null,
-        id
+        idTurno
       ]
     );
 
+    if (resultado.affectedRows !== 1) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje: 'No fue posible cerrar el turno'
+      });
+    }
+
     await connection.commit();
+
+    // --------------------------------------------------------
+    // RESPUESTA
+    // --------------------------------------------------------
 
     return res.json({
       ok: true,
       mensaje: 'Turno de caja cerrado correctamente',
       resumen: {
-        id_turno: Number(id),
+        id_turno: idTurno,
         monto_apertura: montoApertura,
         total_ventas: totalVentas,
+        total_ventas_efectivo: totalEfectivo,
+        total_ventas_otros_metodos: totalOtrosMetodos,
         monto_cierre_sistema: montoSistema,
         monto_cierre_fisico: montoFisico,
         diferencia
       }
     });
+
   } catch (error) {
     await connection.rollback();
 
-    console.error('Error al cerrar turno de caja:', error);
+    console.error('Error al cerrar turno:', error);
 
     return res.status(500).json({
       ok: false,
       mensaje: 'Error interno al cerrar turno de caja'
     });
+
   } finally {
     connection.release();
   }
 };
+
+// ============================================================
+// EXPORTACIONES
+// ============================================================
 
 module.exports = {
   obtenerTurnosCaja,
