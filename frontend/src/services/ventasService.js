@@ -35,11 +35,9 @@ export const obtenerMetodosPago = async () => {
   return response.data;
 };
 
-export const obtenerTurnoActivoCaja = async (idCaja = 1) => {
+export const obtenerTurnoActivoCaja = async (idCaja = null) => {
   const response = await api.get('/turnos-caja/activo', {
-    params: {
-      id_caja: idCaja
-    }
+    params: idCaja ? { id_caja: idCaja } : {}
   });
 
   return response.data;

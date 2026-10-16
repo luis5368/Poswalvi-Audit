@@ -143,15 +143,19 @@ const Ventas = () => {
 
   const cargarTurnoActivo = async () => {
     try {
-      const response = await obtenerTurnoActivoCaja(1);
+      const response = await obtenerTurnoActivoCaja();
 
-      if (response.tiene_turno_activo) {
-        setTurnoActivo(response.turno);
-      } else {
-        setTurnoActivo(null);
-      }
+      const turno = response.tiene_turno_activo
+        ? response.turno
+        : null;
+
+      setTurnoActivo(turno);
+
+      return turno;
     } catch (error) {
+      console.error('Error al consultar turno activo:', error);
       setTurnoActivo(null);
+      return null;
     }
   };
 
@@ -179,14 +183,15 @@ const Ventas = () => {
   };
 
   const abrirNuevaVenta = async () => {
-    await cargarTurnoActivo();
+    const turno = await cargarTurnoActivo();
 
-    if (!turnoActivo) {
-      Swal.fire({
+    if (!turno) {
+      await Swal.fire({
         icon: 'warning',
         title: 'Sin turno activo',
         text: 'Debes tener un turno de caja abierto para registrar ventas.'
       });
+
       return;
     }
 

@@ -332,6 +332,7 @@ const crearVenta = async (req, res) => {
       WHERE t.id_usuario = ?
         AND t.estado = 'Abierto'
       LIMIT 1
+      FOR UPDATE
       `,
       [idUsuario]
     );

@@ -24,6 +24,7 @@ import {
   cerrarTurno
 } from '../../services/cajaService';
 
+import AdministracionCajas from './AdministracionCajas';
 import './cajaTurnos.css';
 
 const dinero = (valor) =>
@@ -430,6 +431,12 @@ const CajaTurnos = () => {
           </button>
         )}
       </section>
+
+      <AdministracionCajas
+        cajas={cajas}
+        turnos={turnos}
+        onActualizar={cargarDatos}
+      />
 
       <section className="caja-toolbar">
         <div className="caja-busqueda">

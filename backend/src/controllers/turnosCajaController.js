@@ -144,14 +144,22 @@ const obtenerTurnoActivo = async (req, res) => {
       WHERE t.estado = 'Abierto'
     `;
 
-    const params = [];
+    const params = [idUsuario];
 
-    if (id_caja) {
+    sql += ` AND t.id_usuario = ?`;
+
+    if (id_caja !== undefined) {
+      const idCaja = Number(id_caja);
+
+      if (!Number.isSafeInteger(idCaja) || idCaja <= 0) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'ID de caja invalido'
+        });
+      }
+
       sql += ` AND t.id_caja = ?`;
-      params.push(id_caja);
-    } else {
-      sql += ` AND t.id_usuario = ?`;
-      params.push(idUsuario);
+      params.push(idCaja);
     }
 
     sql += ` LIMIT 1`;
