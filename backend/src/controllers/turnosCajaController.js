@@ -1,4 +1,3 @@
-
 const pool = require('../config/db');
 
 // ============================================================
@@ -427,6 +426,38 @@ const aperturarTurnoCaja = async (req, res) => {
         ok: false,
         mensaje:
           'El usuario ya tiene un turno de caja abierto'
+      });
+    }
+
+    // ========================================================
+    // NUEVO: VALIDAR ASIGNACIONES SUPERVISADAS PENDIENTES
+    // ========================================================
+    // Si la caja o el usuario tienen una asignación pendiente,
+    // no se permite abrir otro turno desde la apertura propia.
+    // La asignación debe confirmarse o resolverse primero.
+    // ========================================================
+
+    const [asignacionesPendientes] = await connection.query(
+      `
+      SELECT id_asignacion
+      FROM asignaciones_turno_caja
+      WHERE estado = 'Pendiente'
+        AND (
+          id_caja = ?
+          OR id_usuario_cajero = ?
+        )
+      LIMIT 1
+      `,
+      [idCaja, idUsuario]
+    );
+
+    if (asignacionesPendientes.length > 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje:
+          'Existe una asignación supervisada pendiente para esta caja o cajero. Confirma o resuelve la asignación antes de abrir un turno propio.'
       });
     }
 

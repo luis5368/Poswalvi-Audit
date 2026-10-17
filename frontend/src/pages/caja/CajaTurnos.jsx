@@ -21,10 +21,11 @@ import {
   obtenerTurnoActivo,
   obtenerTurnoPorId,
   abrirTurno,
-  cerrarTurno
+  cerrarTurno,
 } from '../../services/cajaService';
 
 import AdministracionCajas from './AdministracionCajas';
+import AperturaSupervisada from './AperturaSupervisada';
 import './cajaTurnos.css';
 
 const dinero = (valor) =>
@@ -435,6 +436,12 @@ const CajaTurnos = () => {
       <AdministracionCajas
         cajas={cajas}
         turnos={turnos}
+        onActualizar={cargarDatos}
+      />
+
+      {/* NUEVO: APERTURA SUPERVISADA DE CAJAS */}
+      <AperturaSupervisada
+        cajas={cajas}
         onActualizar={cargarDatos}
       />
 
