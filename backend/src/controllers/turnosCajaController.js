@@ -1,4 +1,6 @@
+
 const pool = require('../config/db');
+const obtenerAlcanceCaja = require('../utils/alcanceCaja');
 
 // ============================================================
 // FUNCIONES AUXILIARES
@@ -72,6 +74,41 @@ const obtenerTurnosCaja = async (req, res) => {
 
     const params = [];
 
+    // ========================================================
+    // SEGURIDAD: FILTRAR TURNOS SEGUN ROL Y SUCURSAL
+    // ========================================================
+
+    const alcance = await obtenerAlcanceCaja(req);
+
+    if (!alcance) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'Usuario no autorizado para consultar turnos'
+      });
+    }
+
+    if (alcance.esCajero) {
+      // El cajero solo puede consultar sus propios turnos.
+      sql += ' AND t.id_usuario = ?';
+      params.push(alcance.idUsuario);
+
+    } else if (!alcance.esGlobal) {
+      // Otros roles autorizados consultan su sucursal.
+      if (!alcance.idSucursal) {
+        return res.status(403).json({
+          ok: false,
+          mensaje: 'El usuario no tiene una sucursal asignada'
+        });
+      }
+
+      sql += ' AND c.id_sucursal = ?';
+      params.push(alcance.idSucursal);
+    }
+
+    // ========================================================
+    // FILTROS DE CONSULTA
+    // ========================================================
+
     if (estado) {
       sql += ` AND t.estado = ?`;
       params.push(estado);
@@ -114,7 +151,7 @@ const obtenerTurnosCaja = async (req, res) => {
 
 // ============================================================
 // GET /api/turnos-caja/activo
-// CONSULTAR TURNO ACTIVO
+// CONSULTAR TURNO ACTIVO DEL USUARIO AUTENTICADO
 // ============================================================
 
 const obtenerTurnoActivo = async (req, res) => {
@@ -143,6 +180,7 @@ const obtenerTurnoActivo = async (req, res) => {
       WHERE t.estado = 'Abierto'
     `;
 
+    // Siempre filtrar por el usuario autenticado.
     const params = [idUsuario];
 
     sql += ` AND t.id_usuario = ?`;
@@ -153,7 +191,7 @@ const obtenerTurnoActivo = async (req, res) => {
       if (!Number.isSafeInteger(idCaja) || idCaja <= 0) {
         return res.status(400).json({
           ok: false,
-          mensaje: 'ID de caja invalido'
+          mensaje: 'ID de caja inválido'
         });
       }
 
@@ -198,6 +236,15 @@ const obtenerTurnoPorId = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const idTurno = Number(id);
+
+    if (!Number.isSafeInteger(idTurno) || idTurno <= 0) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'ID de turno inválido'
+      });
+    }
+
     const [rows] = await pool.query(
       `
       SELECT
@@ -225,13 +272,37 @@ const obtenerTurnoPorId = async (req, res) => {
       WHERE t.id_turno = ?
       LIMIT 1
       `,
-      [id]
+      [idTurno]
     );
 
     if (rows.length === 0) {
       return res.status(404).json({
         ok: false,
         mensaje: 'Turno de caja no encontrado'
+      });
+    }
+
+    // ========================================================
+    // SEGURIDAD: IMPEDIR CONSULTAS NO AUTORIZADAS
+    // ========================================================
+
+    const alcance = await obtenerAlcanceCaja(req);
+
+    if (
+      !alcance ||
+      (
+        alcance.esCajero &&
+        Number(rows[0].id_usuario) !== alcance.idUsuario
+      ) ||
+      (
+        !alcance.esGlobal &&
+        !alcance.esCajero &&
+        Number(rows[0].id_sucursal) !== alcance.idSucursal
+      )
+    ) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No autorizado para consultar este turno'
       });
     }
 
@@ -380,6 +451,28 @@ const aperturarTurnoCaja = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // SEGURIDAD: VALIDAR SUCURSAL AUTORIZADA
+    // ========================================================
+
+    const alcance = await obtenerAlcanceCaja(req, connection);
+
+    if (
+      !alcance ||
+      (
+        !alcance.esGlobal &&
+        Number(caja[0].id_sucursal) !== alcance.idSucursal
+      )
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        ok: false,
+        mensaje:
+          'No está autorizado para aperturar turnos en esta sucursal'
+      });
+    }
+
     // --------------------------------------------------------
     // EVITAR DOS TURNOS ABIERTOS EN LA MISMA CAJA
     // --------------------------------------------------------
@@ -430,11 +523,10 @@ const aperturarTurnoCaja = async (req, res) => {
     }
 
     // ========================================================
-    // NUEVO: VALIDAR ASIGNACIONES SUPERVISADAS PENDIENTES
+    // VALIDAR ASIGNACIONES SUPERVISADAS PENDIENTES
     // ========================================================
-    // Si la caja o el usuario tienen una asignación pendiente,
-    // no se permite abrir otro turno desde la apertura propia.
-    // La asignación debe confirmarse o resolverse primero.
+    // Una caja o cajero con asignación pendiente no puede
+    // abrir un turno por el procedimiento de apertura propia.
     // ========================================================
 
     const [asignacionesPendientes] = await connection.query(
@@ -504,6 +596,15 @@ const aperturarTurnoCaja = async (req, res) => {
     await connection.rollback();
 
     console.error('Error al aperturar turno:', error);
+
+    // Los índices únicos de MySQL impiden duplicados
+    // incluso ante dos solicitudes simultáneas.
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        ok: false,
+        mensaje: 'La caja o el cajero ya tiene un turno abierto'
+      });
+    }
 
     return res.status(500).json({
       ok: false,
@@ -794,10 +895,6 @@ const cerrarTurnoCaja = async (req, res) => {
     }
 
     await connection.commit();
-
-    // --------------------------------------------------------
-    // RESPUESTA
-    // --------------------------------------------------------
 
     return res.json({
       ok: true,

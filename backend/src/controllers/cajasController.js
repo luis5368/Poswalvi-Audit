@@ -1,5 +1,6 @@
 
 const pool = require('../config/db');
+const obtenerAlcanceCaja = require('../utils/alcanceCaja');
 
 // ============================================================
 // VALIDACIONES COMUNES
@@ -67,6 +68,13 @@ const normalizarDatosCaja = (datos) => {
 const responderError = (res, error, operacion) => {
   console.error(`Error al ${operacion} caja:`, error);
 
+  if (error.code === 'ER_DUP_ENTRY') {
+    return res.status(409).json({
+      ok: false,
+      mensaje: 'Ya existe una caja con ese nombre en esta sucursal'
+    });
+  }
+
   return res.status(500).json({
     ok: false,
     mensaje: `Error interno al ${operacion} la caja`
@@ -99,6 +107,21 @@ const obtenerCajas = async (req, res) => {
     `;
 
     const params = [];
+
+    // SEGURIDAD: restringir consultas por sucursal.
+    const alcance = await obtenerAlcanceCaja(req);
+
+    if (!alcance || (!alcance.esGlobal && !alcance.idSucursal)) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'Usuario sin sucursal autorizada'
+      });
+    }
+
+    if (!alcance.esGlobal) {
+      sql += ' AND c.id_sucursal = ?';
+      params.push(alcance.idSucursal);
+    }
 
     if (estado) {
       sql += ' AND c.estado = ?';
@@ -189,6 +212,22 @@ const obtenerCajaPorId = async (req, res) => {
       });
     }
 
+    // SEGURIDAD: impedir consulta de caja ajena.
+    const alcance = await obtenerAlcanceCaja(req);
+
+    if (
+      !alcance ||
+      (
+        !alcance.esGlobal &&
+        Number(rows[0].id_sucursal) !== alcance.idSucursal
+      )
+    ) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No autorizado para consultar esta caja'
+      });
+    }
+
     return res.json({
       ok: true,
       caja: rows[0]
@@ -260,8 +299,25 @@ const crearCaja = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // Bloqueo de sucursal para coordinar creaciones
-    // simultáneas realizadas mediante este controlador.
+    // SEGURIDAD: restringir creación por sucursal.
+    const alcance = await obtenerAlcanceCaja(req, connection);
+
+    if (
+      !alcance ||
+      (
+        !alcance.esGlobal &&
+        alcance.idSucursal !== idSucursal
+      )
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No autorizado para crear cajas en esta sucursal'
+      });
+    }
+
+    // Bloquear sucursal durante la creación.
     const [sucursales] = await connection.query(
       `
       SELECT id_sucursal, estado
@@ -291,6 +347,7 @@ const crearCaja = async (req, res) => {
       });
     }
 
+    // Validar nombre duplicado.
     const [duplicados] = await connection.query(
       `
       SELECT id_caja
@@ -342,12 +399,7 @@ const crearCaja = async (req, res) => {
   } catch (error) {
     await connection.rollback();
 
-    console.error('Error al crear caja:', error);
-
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error interno al crear la caja'
-    });
+    return responderError(res, error, 'crear');
 
   } finally {
     connection.release();
@@ -451,8 +503,7 @@ const actualizarCaja = async (req, res) => {
       });
     }
 
-    // Bloquear caja para coordinar cambios con
-    // posibles aperturas de turno.
+    // Bloquear caja.
     const [cajas] = await connection.query(
       `
       SELECT id_caja, id_sucursal, estado
@@ -475,14 +526,69 @@ const actualizarCaja = async (req, res) => {
 
     const cajaActual = cajas[0];
 
-    // Evita reactivar accidentalmente una caja
-    // cuando el frontend omite la propiedad estado.
+    // SEGURIDAD: validar sucursal actual y destino.
+    const alcance = await obtenerAlcanceCaja(req, connection);
+
+    if (
+      !alcance ||
+      (
+        !alcance.esGlobal &&
+        (
+          Number(cajaActual.id_sucursal) !== alcance.idSucursal ||
+          idSucursal !== alcance.idSucursal
+        )
+      )
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No autorizado para modificar cajas de esta sucursal'
+      });
+    }
+
+    // Conservar el estado cuando el frontend no lo envía.
     const estadoFinal =
       estado === undefined ? cajaActual.estado : estado;
 
-    // Una caja con operaciones históricas no debe
-    // trasladarse a una sucursal distinta.
-    if (Number(cajaActual.id_sucursal) !== idSucursal) {
+    const cambiaSucursal =
+      Number(cajaActual.id_sucursal) !== idSucursal;
+
+    // ========================================================
+    // VALIDACIÓN DE ASIGNACIONES PENDIENTES
+    // ========================================================
+    // Impedir traslado o inactivación mientras exista un
+    // cajero pendiente de confirmar su fondo.
+    // ========================================================
+
+    if (cambiaSucursal || estadoFinal === 'Inactiva') {
+      const [pendientes] = await connection.query(
+        `
+        SELECT id_asignacion
+        FROM asignaciones_turno_caja
+        WHERE id_caja = ?
+          AND estado = 'Pendiente'
+        LIMIT 1
+        `,
+        [idCaja]
+      );
+
+      if (pendientes.length > 0) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          ok: false,
+          mensaje:
+            'No se puede trasladar o inactivar una caja con asignación pendiente'
+        });
+      }
+    }
+
+    // ========================================================
+    // IMPEDIR TRASLADO DE CAJAS CON HISTORIAL
+    // ========================================================
+
+    if (cambiaSucursal) {
       const [turnos] = await connection.query(
         `
         SELECT id_turno
@@ -514,8 +620,10 @@ const actualizarCaja = async (req, res) => {
       }
     }
 
-    // No permitir inactivación mientras haya
-    // un turno abierto.
+    // ========================================================
+    // PROTEGER TURNOS ABIERTOS
+    // ========================================================
+
     if (estadoFinal === 'Inactiva') {
       const [turnosAbiertos] = await connection.query(
         `
@@ -538,7 +646,10 @@ const actualizarCaja = async (req, res) => {
       }
     }
 
-    // Comprobar unicidad del nombre por sucursal.
+    // ========================================================
+    // VALIDACIÓN DE NOMBRE DUPLICADO
+    // ========================================================
+
     const [duplicados] = await connection.query(
       `
       SELECT id_caja
@@ -559,6 +670,10 @@ const actualizarCaja = async (req, res) => {
         mensaje: 'Ya existe otra caja con ese nombre en esta sucursal'
       });
     }
+
+    // ========================================================
+    // ACTUALIZAR REGISTRO
+    // ========================================================
 
     const [resultado] = await connection.query(
       `
@@ -600,12 +715,7 @@ const actualizarCaja = async (req, res) => {
   } catch (error) {
     await connection.rollback();
 
-    console.error('Error al actualizar caja:', error);
-
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error interno al actualizar la caja'
-    });
+    return responderError(res, error, 'actualizar');
 
   } finally {
     connection.release();
@@ -642,11 +752,18 @@ const cambiarEstadoCaja = async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Consultar y bloquear caja y sucursal.
     const [cajas] = await connection.query(
       `
-      SELECT id_caja, estado
-      FROM cajas
-      WHERE id_caja = ?
+      SELECT
+        c.id_caja,
+        c.id_sucursal,
+        c.estado,
+        s.estado AS estado_sucursal
+      FROM cajas c
+      INNER JOIN sucursales s
+        ON s.id_sucursal = c.id_sucursal
+      WHERE c.id_caja = ?
       LIMIT 1
       FOR UPDATE
       `,
@@ -662,7 +779,69 @@ const cambiarEstadoCaja = async (req, res) => {
       });
     }
 
+    // SEGURIDAD: validar alcance por sucursal.
+    const alcance = await obtenerAlcanceCaja(req, connection);
+
+    if (
+      !alcance ||
+      (
+        !alcance.esGlobal &&
+        Number(cajas[0].id_sucursal) !== alcance.idSucursal
+      )
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No autorizado para cambiar el estado de esta caja'
+      });
+    }
+
+    // Impedir reactivación en una sucursal inactiva.
+    if (
+      estado === 'Activa' &&
+      cajas[0].estado_sucursal !== 'Activa'
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        ok: false,
+        mensaje:
+          'No se puede activar una caja de una sucursal inactiva'
+      });
+    }
+
     if (estado === 'Inactiva') {
+
+      // ======================================================
+      // VALIDAR ASIGNACIONES PENDIENTES
+      // ======================================================
+
+      const [pendientes] = await connection.query(
+        `
+        SELECT id_asignacion
+        FROM asignaciones_turno_caja
+        WHERE id_caja = ?
+          AND estado = 'Pendiente'
+        LIMIT 1
+        `,
+        [idCaja]
+      );
+
+      if (pendientes.length > 0) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          ok: false,
+          mensaje:
+            'No se puede inactivar una caja con asignación pendiente'
+        });
+      }
+
+      // ======================================================
+      // VALIDAR TURNOS ABIERTOS
+      // ======================================================
+
       const [turnosAbiertos] = await connection.query(
         `
         SELECT id_turno
@@ -684,6 +863,10 @@ const cambiarEstadoCaja = async (req, res) => {
         });
       }
     }
+
+    // ========================================================
+    // ACTUALIZAR ESTADO
+    // ========================================================
 
     await connection.query(
       `
