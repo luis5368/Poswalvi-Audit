@@ -1,7 +1,7 @@
 
 import api from './api';
 
-const BASE = '/turnos-caja/asignaciones';
+const BASE = '/asignaciones-caja';
 
 export const obtenerCajerosDisponibles = async (idCaja) => {
   const response = await api.get(`${BASE}/cajeros`, {
