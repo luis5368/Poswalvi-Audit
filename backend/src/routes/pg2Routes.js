@@ -1,0 +1,2 @@
+const express=require('express');const auth=require('../middlewares/authMiddleware');const reportes=require('../controllers/reportesController');const configuracion=require('../controllers/configuracionEmpresaController');
+const router=express.Router();router.use(auth);router.get('/reportes',reportes.obtener);router.get('/configuracion',configuracion.obtener);router.put('/configuracion',configuracion.actualizar);module.exports=router;

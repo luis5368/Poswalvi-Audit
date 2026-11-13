@@ -1,3 +1,4 @@
+import {useAuth} from '../../context/AuthContext';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -27,6 +28,7 @@ const AdministracionCajas = ({
   turnos = [],
   onActualizar
 }) => {
+  const {puede}=useAuth();
   const [visible, setVisible] = useState(false);
   const [sucursales, setSucursales] = useState([]);
   const [sinPermisoSucursales, setSinPermisoSucursales] =
@@ -305,7 +307,7 @@ const AdministracionCajas = ({
               type="button"
               className="caja-btn-primary"
               onClick={iniciarCreacion}
-              disabled={guardando}
+              disabled={guardando||!puede('Cajas','Crear')}
             >
               <Plus size={16} />
               Nueva caja
@@ -378,7 +380,7 @@ const AdministracionCajas = ({
                             onClick={() =>
                               iniciarEdicion(caja)
                             }
-                            disabled={guardando}
+                            disabled={guardando||!puede('Cajas','Editar')}
                           >
                             <Pencil size={16} />
                           </button>
@@ -394,7 +396,7 @@ const AdministracionCajas = ({
                               cambiarEstado(caja)
                             }
                             disabled={
-                              guardando ||
+                              guardando || !puede('Cajas','Editar') ||
                               (caja.estado === 'Activa' &&
                                 Boolean(abierto))
                             }
@@ -539,7 +541,7 @@ const AdministracionCajas = ({
                 <button
                   type="submit"
                   className="caja-btn-primary"
-                  disabled={guardando}
+                  disabled={guardando||!(cajaEditando?puede('Cajas','Editar'):puede('Cajas','Crear'))}
                 >
                   {guardando
                     ? 'Guardando...'

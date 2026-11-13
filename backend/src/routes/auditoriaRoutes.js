@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const revision = require('../controllers/auditoriaRevisionController');
 
 const verificarToken = require('../middlewares/authMiddleware');
 const verificarPermiso = require('../middlewares/permisoMiddleware');
@@ -33,28 +34,28 @@ router.get(
   '/hallazgos',
   verificarToken,
   verificarPermiso('Auditoria', 'Consultar'),
-  obtenerHallazgos
+  revision.listar
 );
 
 router.get(
   '/hallazgos/:id/detalle',
   verificarToken,
   verificarPermiso('Auditoria', 'Consultar'),
-  obtenerDetalleHallazgo
+  revision.detalle
 );
 
 router.get(
   '/hallazgos/:id/evidencias',
   verificarToken,
   verificarPermiso('Auditoria', 'Consultar'),
-  obtenerEvidenciasPorHallazgo
+  revision.evidencias
 );
 
 router.patch(
   '/hallazgos/:id/estado',
   verificarToken,
   verificarPermiso('Auditoria', 'Revisar'),
-  actualizarEstadoHallazgo
+  revision.actualizar
 );
 
 router.post(
@@ -124,7 +125,7 @@ router.get(
   '/dashboard/resumen',
   verificarToken,
   verificarPermiso('Auditoria', 'Consultar'),
-  obtenerResumenDashboard
+  revision.resumen
 );
 
 module.exports = router;

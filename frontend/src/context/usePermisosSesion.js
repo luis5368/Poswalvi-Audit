@@ -1,0 +1,10 @@
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {trazaNavegacion} from '../services/trazaNavegacion';
+import api from '../services/api';
+import {validarPermisos} from '../services/permisosNavegacion';
+export default function usePermisosSesion(token){
+  const [datos,setDatos]=useState({token:null,permisos:[],estado:'sin_sesion'});const secuencia=useRef(0);const abort=useRef(null);
+  const refrescar=useCallback(async()=>{const seq=++secuencia.current;abort.current?.abort();const ctrl=new AbortController();abort.current=ctrl;if(!token){setDatos({token:null,permisos:[],estado:'sin_sesion'});return;}setDatos(prev=>prev.token===token&&['disponible','CAMBIO_PASSWORD_REQUERIDO','ROL_INACTIVO'].includes(prev.estado)?{...prev,actualizando:true}: {token,permisos:[],estado:'cargando'});trazaNavegacion('actualizar_permisos',{solicitud:'/auth/permisos'});try{const {data}=await api.get('/auth/permisos',{signal:ctrl.signal});const permisos=validarPermisos(data);if(seq===secuencia.current)setDatos({token,permisos,estado:'disponible',sucursal:data.sucursal});}catch(e){if(seq!==secuencia.current||ctrl.signal.aborted)return;const status=e.response?.status;const temporal=(!status&&e.isAxiosError)||status>=500;setDatos(prev=>temporal&&prev.token===token&&prev.estado==='disponible'?{...prev,actualizando:false,errorActualizacion:true}:{token,permisos:[],estado:e.response?.data?.codigo||'error'});trazaNavegacion('error_permisos',{http:status,solicitud:'/auth/permisos'});}},[token]);
+  useEffect(()=>{refrescar();const timer=setInterval(refrescar,60000);const focus=()=>refrescar();window.addEventListener('focus',focus);window.addEventListener('poswalvi-permisos-invalidos',focus);return()=>{++secuencia.current;abort.current?.abort();clearInterval(timer);window.removeEventListener('focus',focus);window.removeEventListener('poswalvi-permisos-invalidos',focus);};},[refrescar]);
+  return {sucursalSesion:datos.token===token?datos.sucursal:null,estadoPermisos:datos.token===token?datos.estado:'cargando',permisos:datos.token===token?datos.permisos:[],refrescarPermisos:refrescar};
+}

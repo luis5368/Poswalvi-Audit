@@ -17,4 +17,5 @@ router.patch('/cambiar-password', verificarToken, cambiarPassword);
 
 
 
+router.get('/permisos', verificarToken, require('../controllers/permisosSesionController').obtener);
 module.exports = router;

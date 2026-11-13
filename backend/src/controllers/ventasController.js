@@ -1,4 +1,20 @@
 const pool = require('../config/db');
+const obtenerAlcanceCaja = require('../utils/alcanceCaja');
+
+// Se agrega siempre con AND: los filtros del cliente solo pueden restringirlo.
+const obtenerFiltroVentas = async (req, db = pool) => {
+  const alcance = await obtenerAlcanceCaja(req, db);
+
+  if (!alcance) return null;
+  if (alcance.esGlobal) return { sql: '', params: [] };
+  if (alcance.esCajero) {
+    return { sql: ' AND v.id_usuario = ?', params: [alcance.idUsuario] };
+  }
+  if (!Number.isSafeInteger(alcance.idSucursal) || alcance.idSucursal <= 0) {
+    return null;
+  }
+  return { sql: ' AND v.id_sucursal = ?', params: [alcance.idSucursal] };
+};
 
 const redondear2 = (valor) => {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
@@ -22,6 +38,11 @@ const obtenerPorcentajeIva = async (connection) => {
 // ============================================================
 const obtenerVentas = async (req, res) => {
   try {
+    const filtro = await obtenerFiltroVentas(req);
+    if (!filtro) {
+      return res.status(403).json({ ok: false, mensaje: 'No autorizado para consultar ventas' });
+    }
+
     const {
       estado,
       id_sucursal,
@@ -65,7 +86,8 @@ const obtenerVentas = async (req, res) => {
       WHERE 1 = 1
     `;
 
-    const params = [];
+    sql += filtro.sql;
+    const params = [...filtro.params];
 
     if (estado) {
       sql += ` AND v.estado = ?`;
@@ -130,6 +152,10 @@ const obtenerVentas = async (req, res) => {
 const obtenerVentaPorId = async (req, res) => {
   try {
     const { id } = req.params;
+    const filtro = await obtenerFiltroVentas(req);
+    if (!filtro) {
+      return res.status(403).json({ ok: false, mensaje: 'No autorizado para consultar ventas' });
+    }
 
     const [ventaRows] = await pool.query(
       `
@@ -163,9 +189,10 @@ const obtenerVentaPorId = async (req, res) => {
       LEFT JOIN sucursales s ON v.id_sucursal = s.id_sucursal
       LEFT JOIN cajas cj ON v.id_caja = cj.id_caja
       WHERE v.id_venta = ?
+      ${filtro.sql}
       LIMIT 1
       `,
-      [id]
+      [id, ...filtro.params]
     );
 
     if (ventaRows.length === 0) {
@@ -279,7 +306,7 @@ const crearVenta = async (req, res) => {
 
     const descuentoVenta = redondear2(descuento);
 
-    if (Number.isNaN(descuentoVenta) || descuentoVenta < 0) {
+    if (!Number.isFinite(descuentoVenta) || descuentoVenta < 0) {
       await connection.rollback();
 
       return res.status(400).json({
@@ -426,11 +453,12 @@ const crearVenta = async (req, res) => {
     // Procesar productos
     let subtotalVenta = 0;
     const detalleProcesado = [];
+    const saldosPorProducto = new Map();
 
     for (const item of productos) {
       const idProducto = item.id_producto;
       const cantidad = Number(item.cantidad);
-      const descuentoLinea = redondear2(item.descuento || 0);
+      const descuentoLinea = redondear2(item.descuento ?? 0);
 
       if (!idProducto) {
         await connection.rollback();
@@ -441,7 +469,7 @@ const crearVenta = async (req, res) => {
         });
       }
 
-      if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      if (!Number.isSafeInteger(cantidad) || cantidad <= 0) {
         await connection.rollback();
 
         return res.status(400).json({
@@ -450,12 +478,12 @@ const crearVenta = async (req, res) => {
         });
       }
 
-      if (descuentoLinea < 0) {
+      if (!Number.isFinite(descuentoLinea) || descuentoLinea < 0) {
         await connection.rollback();
 
         return res.status(400).json({
           ok: false,
-          mensaje: 'El descuento por producto no puede ser negativo'
+          mensaje: 'El descuento por producto debe ser finito y no negativo'
         });
       }
 
@@ -496,20 +524,30 @@ const crearVenta = async (req, res) => {
         });
       }
 
-      const precioUnitario = redondear2(
-        item.precio_unitario !== undefined
-          ? item.precio_unitario
-          : producto.precio_venta
-      );
+      const precioUnitario = redondear2(producto.precio_venta);
 
       const costoUnitario = redondear2(producto.precio_costo);
 
-      if (Number.isNaN(precioUnitario) || precioUnitario <= 0) {
+      if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) {
         await connection.rollback();
 
         return res.status(400).json({
           ok: false,
           mensaje: `El precio unitario del producto ${producto.nombre_producto} debe ser mayor a 0`
+        });
+      }
+
+      if (
+        item.precio_unitario !== undefined &&
+        (
+          !Number.isFinite(Number(item.precio_unitario)) ||
+          Number(item.precio_unitario) !== precioUnitario
+        )
+      ) {
+        await connection.rollback();
+        return res.status(400).json({
+          ok: false,
+          mensaje: `El precio del producto ${producto.nombre_producto} no coincide con el precio autorizado`
         });
       }
 
@@ -530,31 +568,45 @@ const crearVenta = async (req, res) => {
       let stockNuevo = null;
 
       if (Number(producto.controla_inventario) === 1) {
-        const [saldoRows] = await connection.query(
-          `
-          SELECT
-            id_saldo,
-            stock_actual
-          FROM inventario_saldos
-          WHERE id_producto = ?
-            AND id_sucursal = ?
-            AND id_bodega = ?
-          LIMIT 1
-          FOR UPDATE
-          `,
-          [idProducto, turno.id_sucursal, idBodega]
-        );
+        // La clave proviene de BD: IDs equivalentes del cliente comparten saldo.
+        const claveProducto = String(producto.id_producto);
+        if (!saldosPorProducto.has(claveProducto)) {
+          const [saldoRows] = await connection.query(
+            `
+            SELECT
+              id_saldo,
+              stock_actual
+            FROM inventario_saldos
+            WHERE id_producto = ?
+              AND id_sucursal = ?
+              AND id_bodega = ?
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [idProducto, turno.id_sucursal, idBodega]
+          );
 
-        if (saldoRows.length === 0) {
-          await connection.rollback();
+          if (saldoRows.length === 0) {
+            await connection.rollback();
 
-          return res.status(400).json({
-            ok: false,
-            mensaje: `El producto ${producto.nombre_producto} no tiene saldo de inventario configurado`
-          });
+            return res.status(400).json({
+              ok: false,
+              mensaje: `El producto ${producto.nombre_producto} no tiene saldo de inventario configurado`
+            });
+          }
+
+          const stockActual = Number(saldoRows[0].stock_actual);
+          if (!Number.isFinite(stockActual) || stockActual < 0) {
+            await connection.rollback();
+            return res.status(409).json({
+              ok: false,
+              mensaje: `Saldo de inventario inválido para ${producto.nombre_producto}`
+            });
+          }
+          saldosPorProducto.set(claveProducto, stockActual);
         }
 
-        stockAnterior = Number(saldoRows[0].stock_actual);
+        stockAnterior = saldosPorProducto.get(claveProducto);
 
         if (stockAnterior < cantidad) {
           await connection.rollback();
@@ -566,6 +618,7 @@ const crearVenta = async (req, res) => {
         }
 
         stockNuevo = stockAnterior - cantidad;
+        saldosPorProducto.set(claveProducto, stockNuevo);
       }
 
       subtotalVenta = redondear2(subtotalVenta + subtotalLinea);
@@ -898,6 +951,12 @@ const anularVenta = async (req, res) => {
       });
     }
 
+    const filtro = await obtenerFiltroVentas(req, connection);
+    if (!filtro) {
+      await connection.rollback();
+      return res.status(403).json({ ok: false, mensaje: 'No autorizado para anular ventas' });
+    }
+
     const [ventaRows] = await connection.query(
       `
       SELECT
@@ -912,10 +971,11 @@ const anularVenta = async (req, res) => {
       FROM ventas v
       LEFT JOIN turnos_caja t ON v.id_turno = t.id_turno
       WHERE v.id_venta = ?
+      ${filtro.sql}
       LIMIT 1
       FOR UPDATE
       `,
-      [id]
+      [id, ...filtro.params]
     );
 
     if (ventaRows.length === 0) {

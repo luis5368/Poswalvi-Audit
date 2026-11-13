@@ -1,3 +1,4 @@
+import {useAuth} from '../../context/AuthContext';
 
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
@@ -15,6 +16,7 @@ const dinero = (valor) =>
   `Q ${Number(valor || 0).toFixed(2)}`;
 
 const AperturaSupervisada = ({ cajas = [], onActualizar }) => {
+  const {puede}=useAuth();
   const [puedeAsignar, setPuedeAsignar] = useState(false);
   const [cajeros, setCajeros] = useState([]);
   const [mias, setMias] = useState([]);
@@ -30,14 +32,14 @@ const AperturaSupervisada = ({ cajas = [], onActualizar }) => {
 
   const cargar = async () => {
     try {
-      const respuesta = await obtenerMisAsignaciones();
+      const respuesta = await (puede('TurnosCaja','Consultar')?obtenerMisAsignaciones():Promise.resolve({asignaciones:[]}));
       setMias(respuesta.asignaciones || []);
     } catch (error) {
       console.error('Error al cargar mis asignaciones:', error);
     }
 
     try {
-      const respuesta = await obtenerAsignacionesPendientes();
+      const respuesta = await (puede('Cajas','Crear')?obtenerAsignacionesPendientes():Promise.reject({response:{status:403}}));
       setPendientes(respuesta.asignaciones || []);
       setPuedeAsignar(true);
     } catch (error) {
@@ -257,7 +259,7 @@ const AperturaSupervisada = ({ cajas = [], onActualizar }) => {
               <div className="caja-modal-acciones">
                 <button
                   type="button"
-                  disabled={procesando}
+                  disabled={procesando||!puede('TurnosCaja','Aperturar')}
                   onClick={() => responder(a, 'Rechazar')}
                 >
                   Rechazar
@@ -266,7 +268,7 @@ const AperturaSupervisada = ({ cajas = [], onActualizar }) => {
                 <button
                   type="button"
                   className="caja-btn-primary"
-                  disabled={procesando}
+                  disabled={procesando||!puede('TurnosCaja','Aperturar')}
                   onClick={() => responder(a, 'Confirmar')}
                 >
                   Confirmar recepción
