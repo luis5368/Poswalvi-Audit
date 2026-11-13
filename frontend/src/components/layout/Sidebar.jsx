@@ -1,3 +1,5 @@
+import {useAuth} from '../../context/AuthContext';
+import {rutaPermitida} from '../../services/permisosNavegacion';
 import {
   BarChart3,
   Boxes,
@@ -34,6 +36,7 @@ const menuItems = [
 ];
 
 const Sidebar = () => {
+  const {permisos}=useAuth();
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -48,7 +51,7 @@ const Sidebar = () => {
       </div>
 
       <nav className="sidebar-menu">
-        {menuItems.map((item) => {
+        {menuItems.filter(item=>rutaPermitida(item.path,permisos)).map((item) => {
           const Icon = item.icon;
 
           return (

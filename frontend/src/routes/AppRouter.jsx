@@ -1,3 +1,10 @@
+import {useEffect, useRef} from 'react';
+import {trazaNavegacion} from '../services/trazaNavegacion';
+import {useLocation} from 'react-router-dom';
+import {rutaPermitida} from '../services/permisosNavegacion';
+import MainLayout from '../components/layout/MainLayout';
+import Reportes from '../pages/reportes/Reportes';
+import Configuracion from '../pages/configuracion/Configuracion';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Login from '../pages/auth/Login';
@@ -28,7 +35,7 @@ const RutaPrivada = ({ children }) => {
 };
 
 const RutaCambioPassword = ({ children }) => {
-  const { estaAutenticado, usuario, cargandoAuth } = useAuth();
+  const { estaAutenticado, usuario, cargandoAuth, estadoPermisos: estadoActualPermisos } = useAuth();
 
   if (cargandoAuth) {
     return null;
@@ -38,7 +45,9 @@ const RutaCambioPassword = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (Number(usuario?.requiere_cambio_password || 0) === 0) {
+  if (estadoActualPermisos === 'cargando') return null;
+
+  if (Number(usuario?.requiere_cambio_password || 0) === 0 && estadoActualPermisos!=='CAMBIO_PASSWORD_REQUERIDO') {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -46,6 +55,8 @@ const RutaCambioPassword = ({ children }) => {
 };
 
 const RutaPrivadaNormal = ({ children }) => {
+  const {pathname}=useLocation();
+  const {permisos,estadoPermisos,refrescarPermisos}=useAuth();
   const { estaAutenticado, usuario, cargandoAuth } = useAuth();
 
   if (cargandoAuth) {
@@ -60,12 +71,20 @@ const RutaPrivadaNormal = ({ children }) => {
     return <Navigate to="/cambiar-password" replace />;
   }
 
+  if(estadoPermisos==='CAMBIO_PASSWORD_REQUERIDO')return <Navigate to="/cambiar-password" replace />;
+  if(!rutaPermitida(pathname,permisos))return <MainLayout><p role="status">{estadoPermisos==='cargando'?'Verificando permisos...':'Esta pantalla no esta autorizada o no se pudieron verificar sus permisos.'}</p><button onClick={refrescarPermisos}>Reintentar</button></MainLayout>;
   return children;
 };
 
 const AppRouter = () => {
+  const {pathname}=useLocation();
+  const anterior=useRef(pathname);
+  const {estaAutenticado}=useAuth();
+  useEffect(()=>{trazaNavegacion("ruta_SPA",{anterior:anterior.current,nueva:pathname,autenticado:estaAutenticado});anterior.current=pathname;},[pathname,estaAutenticado]);
   return (
     <Routes>
+      <Route path="/reportes" element={<RutaPrivadaNormal><Reportes /></RutaPrivadaNormal>} />
+      <Route path="/configuracion" element={<RutaPrivadaNormal><Configuracion /></RutaPrivadaNormal>} />
       <Route path="/login" element={<Login />} />
 
       <Route

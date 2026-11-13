@@ -1,3 +1,4 @@
+const { performance } = require('node:perf_hooks');
 const pool = require('../config/db');
 const { 
   ejecutarVentaBajoCosto,
@@ -427,9 +428,11 @@ const ejecutarReglaDiferenciaCaja = async (req, res) => {
 
 const ejecutarMotorCompleto = async (req, res) => {
   try {
+    const inicio = performance.now();
     const resultado = await ejecutarTodasLasReglas(req.usuario.id_usuario);
+    const duracion_ms = performance.now() - inicio;
 
-    return res.json(resultado);
+    return res.json({...resultado, ejecucion: {duracion_ms, unidad: "ms", alcance: "reglas_secuenciales_y_persistencia_del_motor"}});
 
   } catch (error) {
     console.error('Error en ejecutarMotorCompleto:', error);

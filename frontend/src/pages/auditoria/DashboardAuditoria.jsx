@@ -1,3 +1,6 @@
+import {formatDuracion, formatHoras} from '../../services/metricasAuditoria';
+import RevisionHallazgos from './RevisionHallazgos';
+import {useAuth} from '../../context/AuthContext';
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
@@ -35,22 +38,26 @@ const formatFecha = (fecha) => {
   });
 };
 
-const formatTiempo = (horas) => {
-  if (horas === null || horas === undefined) return 'No medido';
-  return `${Number(horas).toFixed(0)} h`;
-};
+const formatTiempo = formatHoras;
 
 const DashboardAuditoria = () => {
+  const {puede}=useAuth();
   const [data, setData] = useState(null);
+  const [errorResumen, setErrorResumen] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [ejecutando, setEjecutando] = useState(false);
+  const [duracionMotor, setDuracionMotor] = useState(null);
 
   const cargarDashboard = async () => {
     try {
       setCargando(true);
+      setErrorResumen(false);
       const response = await obtenerResumenAuditoria();
+      if (!response?.resumen) throw new Error("Resumen incompleto");
       setData(response);
     } catch (error) {
+      setErrorResumen(true);
+      setData(null);
       Swal.fire({
         icon: 'error',
         title: 'Error al cargar auditoría',
@@ -67,12 +74,14 @@ const DashboardAuditoria = () => {
     try {
       setEjecutando(true);
 
+      setDuracionMotor(null);
       const response = await ejecutarMotorAuditoria();
+      setDuracionMotor(response.ejecucion?.duracion_ms ?? null);
 
       await Swal.fire({
         icon: 'success',
         title: 'Motor ejecutado',
-        text: `Reglas ejecutadas: ${response.total_reglas_ejecutadas || 0}. Hallazgos generados: ${response.total_hallazgos_generados || 0}.`
+        text: `Reglas ejecutadas: ${response.total_reglas_ejecutadas || 0}. Hallazgos generados: ${response.total_hallazgos_generados || 0}. Duración: ${formatDuracion(response.ejecucion?.duracion_ms)}.`
       });
 
       await cargarDashboard();
@@ -94,7 +103,7 @@ const DashboardAuditoria = () => {
   }, []);
 
   const resumen = data?.resumen;
-  const tiempo = data?.tiempo_deteccion;
+  const tiempo = data?.tiempo_resolucion;
 
   return (
     <MainLayout>
@@ -115,7 +124,7 @@ const DashboardAuditoria = () => {
           <button
             className="primary-button"
             onClick={ejecutarMotor}
-            disabled={ejecutando}
+            disabled={ejecutando||!puede('Auditoria','Revisar')}
           >
             <PlayCircle size={18} />
             {ejecutando ? 'Ejecutando...' : 'Ejecutar motor'}
@@ -123,6 +132,8 @@ const DashboardAuditoria = () => {
         </div>
       </div>
 
+      <RevisionHallazgos />
+      <p>Indicadores limitados a reglas con sucursal trazable.</p>
       {cargando ? (
         <div className="audit-loading">
           Cargando dashboard de auditoría...
@@ -161,9 +172,9 @@ const DashboardAuditoria = () => {
               <div className="audit-kpi-icon green">
                 <Timer size={26} />
               </div>
-              <span>Tiempo promedio</span>
+              <span>Resolución promedio</span>
               <h2>{formatTiempo(tiempo?.promedio_horas)}</h2>
-              <small>Detección de irregularidades</small>
+              <small>Solo casos cerrados con fechas válidas</small>
             </div>
           </section>
 
@@ -320,8 +331,8 @@ const DashboardAuditoria = () => {
 
                 <div>
                   <Clock size={20} />
-                  <span>Máximo detección</span>
-                  <strong>{formatTiempo(tiempo?.maximo_horas)}</strong>
+                  <span>Última ejecución (esta vista)</span>
+                  <strong>{formatDuracion(duracionMotor)}</strong>
                 </div>
               </div>
             </div>

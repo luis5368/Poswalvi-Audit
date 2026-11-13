@@ -30,7 +30,7 @@ const verificarToken = async (req, res, next) => {
           u.apellido, 
           u.id_rol, 
           u.estado, 
-          r.nombre_rol
+          r.nombre_rol, r.estado AS estado_rol, u.requiere_cambio_password
        FROM usuarios u
        INNER JOIN roles r ON u.id_rol = r.id_rol
        WHERE u.id_usuario = ?
@@ -78,6 +78,11 @@ const verificarToken = async (req, res, next) => {
     }
 
     const sesion = sesiones[0];
+    const salida = req.method === 'POST' && req.baseUrl === '/api/auth' && req.path === '/logout';
+    const cambio = req.method === 'PATCH' && req.baseUrl === '/api/auth' && req.path === '/cambiar-password';
+    if (!salida && user.estado_rol !== 'Activo') return res.status(403).json({ok:false,codigo:'ROL_INACTIVO',mensaje:'Rol inactivo'});
+    if (!salida && !cambio && Number(user.requiere_cambio_password)) return res.status(403).json({ok:false,codigo:'CAMBIO_PASSWORD_REQUERIDO',mensaje:'Debe cambiar su contrasena'});
+
 
     const [politicas] = await pool.query(
       `SELECT *
@@ -148,11 +153,11 @@ const verificarToken = async (req, res, next) => {
     next();
 
   } catch (error) {
-    console.error('Error en authMiddleware:', error.message);
-
-    return res.status(401).json({
+    const invalido = ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(error.name);
+    // Un fallo del repositorio no demuestra revocacion ni invalidez del JWT.
+    return res.status(invalido ? 401 : 503).json({
       ok: false,
-      mensaje: 'Token inválido o expirado'
+      mensaje: invalido ? 'Token inválido o expirado' : 'No se pudo verificar la sesión. Intente nuevamente.'
     });
   }
 };

@@ -35,7 +35,7 @@ const fecha = (valor) =>
   valor ? new Date(valor).toLocaleString('es-GT') : '-';
 
 const CajaTurnos = () => {
-  const { usuario } = useAuth();
+  const { usuario, puede } = useAuth();
 
   const [cajas, setCajas] = useState([]);
   const [turnos, setTurnos] = useState([]);
@@ -66,9 +66,9 @@ const CajaTurnos = () => {
       setCargando(true);
 
       const [resCajas, resTurnos, resActivo] = await Promise.all([
-        obtenerCajas(),
-        obtenerTurnos(),
-        obtenerTurnoActivo()
+        puede('Cajas','Consultar') ? obtenerCajas() : Promise.resolve({cajas:[]}),
+        puede('TurnosCaja','Consultar') ? obtenerTurnos() : Promise.resolve({turnos:[]}),
+        puede('TurnosCaja','Consultar') ? obtenerTurnoActivo() : Promise.resolve({tiene_turno_activo:false})
       ]);
 
       setCajas(resCajas.cajas || []);
@@ -364,7 +364,7 @@ const CajaTurnos = () => {
           <button
             className="caja-btn-primary"
             onClick={abrirFormularioApertura}
-            disabled={Boolean(miTurno)}
+            disabled={Boolean(miTurno)||!puede('TurnosCaja','Aperturar')||!puede('Cajas','Consultar')}
           >
             <Plus size={17} />
             Abrir turno
@@ -433,17 +433,17 @@ const CajaTurnos = () => {
         )}
       </section>
 
-      <AdministracionCajas
+      {puede('Cajas','Consultar') && <AdministracionCajas
         cajas={cajas}
         turnos={turnos}
         onActualizar={cargarDatos}
-      />
+      />}
 
       {/* NUEVO: APERTURA SUPERVISADA DE CAJAS */}
-      <AperturaSupervisada
+      {(puede('Cajas','Crear')||puede('TurnosCaja','Consultar')) && <AperturaSupervisada
         cajas={cajas}
         onActualizar={cargarDatos}
-      />
+      />}
 
       <section className="caja-toolbar">
         <div className="caja-busqueda">
@@ -533,7 +533,7 @@ const CajaTurnos = () => {
                           Number(usuario?.id_usuario) && (
                           <button
                             title="Cerrar turno"
-                            onClick={() => solicitarCierre(turno)}
+                            disabled={!puede('TurnosCaja','Cerrar')} onClick={() => solicitarCierre(turno)}
                           >
                             <LockKeyhole size={16} />
                           </button>

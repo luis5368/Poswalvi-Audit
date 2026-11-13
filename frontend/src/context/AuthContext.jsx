@@ -1,3 +1,4 @@
+import usePermisosSesion from './usePermisosSesion';
 import { createContext, useContext, useEffect, useState } from 'react';
 import {
   loginRequest,
@@ -11,6 +12,9 @@ export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);
   const [token, setToken] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
+  const permisosSesion = usePermisosSesion(token);
+  const puede = (modulo,accion) => permisosSesion.permisos.includes(modulo+':'+accion);
+  useEffect(()=>{const invalidar=()=>{setToken(null);setUsuario(null);};const cambio=e=>{if(e.key==='poswalvi_token'||e.key==='poswalvi_usuario')invalidar();};window.addEventListener('poswalvi-sesion-invalida',invalidar);window.addEventListener('storage',cambio);return()=>{window.removeEventListener('poswalvi-sesion-invalida',invalidar);window.removeEventListener('storage',cambio);};},[]);
 
   useEffect(() => {
     const tokenGuardado = localStorage.getItem('poswalvi_token');
@@ -18,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 
     if (tokenGuardado && usuarioGuardado) {
       setToken(tokenGuardado);
-      setUsuario(JSON.parse(usuarioGuardado));
+      try {setUsuario(JSON.parse(usuarioGuardado));} catch {localStorage.removeItem('poswalvi_token');localStorage.removeItem('poswalvi_usuario');setToken(null);}
     }
 
     setCargandoAuth(false);
@@ -64,6 +68,7 @@ export const AuthProvider = ({ children }) => {
       );
 
       setUsuario(usuarioActualizado);
+      permisosSesion.refrescarPermisos();
     }
 
     return data;
@@ -88,6 +93,8 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
+        ...permisosSesion,
+        puede,
         usuario,
         token,
         cargandoAuth,

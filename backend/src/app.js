@@ -50,4 +50,5 @@ app.use('/api/dashboard-admin', dashboardAdminRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/asignaciones-caja', asignacionesCajaRoutes);
 
+app.use('/api', require('./routes/pg2Routes'));
 module.exports = app;  
