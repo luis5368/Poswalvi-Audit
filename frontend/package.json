@@ -9,16 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^latest",
-    "axios": "^latest",
-    "lucide-react": "^latest",
-    "react": "^latest",
-    "react-dom": "^latest",
-    "react-router-dom": "^latest",
-    "sweetalert2": "^latest",
-    "vite": "^latest"
+    "@vitejs/plugin-react": "6.1.2",
+    "axios": "1.20.0",
+    "lucide-react": "1.52.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.4",
+    "sweetalert2": "11.26.25",
+    "vite": "8.3.3"
   },
   "devDependencies": {
-    "eslint": "^latest"
+    "eslint": "10.15.0"
   }
 }

@@ -1,4 +1,5 @@
 export const rutasPermisos = Object.freeze({
+  '/alertas-seguridad':['AlertasSeguridad:Consultar'],
   '/dashboard':['Reportes:Consultar'], '/ventas':['Ventas:Consultar'], '/compras':['Compras:Consultar'],
   '/inventario':['InventarioSaldos:Consultar'], '/productos':['Productos:Consultar'], '/clientes':['Clientes:Consultar'],
   '/proveedores':['Proveedores:Consultar'], '/usuarios':['Usuarios:Consultar'], '/auditoria':['Auditoria:Consultar'],

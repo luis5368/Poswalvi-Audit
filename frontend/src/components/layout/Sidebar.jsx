@@ -21,6 +21,7 @@ import { NavLink } from 'react-router-dom';
 import './layout.css';
 
 const menuItems = [
+  { label: 'Alertas de Seguridad', icon: ShieldAlert, path: '/alertas-seguridad' },
   { label: 'Dashboard', icon: Home, path: '/dashboard' },
   { label: 'Ventas', icon: ShoppingCart, path: '/ventas' },
   { label: 'Inventario', icon: Boxes, path: '/inventario' },
@@ -57,6 +58,7 @@ const Sidebar = () => {
           return (
             <NavLink
               key={item.label}
+              aria-label={item.label}
               to={item.path}
               className={({ isActive }) =>
                 isActive ? 'sidebar-link active' : 'sidebar-link'
