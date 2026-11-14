@@ -1,3 +1,4 @@
+const cicloSesion = require('../services/cicloSesionService');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 
@@ -77,67 +78,15 @@ const verificarToken = async (req, res, next) => {
       });
     }
 
-    const sesion = sesiones[0];
     const salida = req.method === 'POST' && req.baseUrl === '/api/auth' && req.path === '/logout';
     const cambio = req.method === 'PATCH' && req.baseUrl === '/api/auth' && req.path === '/cambiar-password';
     if (!salida && user.estado_rol !== 'Activo') return res.status(403).json({ok:false,codigo:'ROL_INACTIVO',mensaje:'Rol inactivo'});
     if (!salida && !cambio && Number(user.requiere_cambio_password)) return res.status(403).json({ok:false,codigo:'CAMBIO_PASSWORD_REQUERIDO',mensaje:'Debe cambiar su contrasena'});
 
 
-    const [politicas] = await pool.query(
-      `SELECT *
-       FROM seguridad_politica_rol
-       WHERE id_rol = ?
-         AND estado = 'Activa'
-       LIMIT 1`,
-      [user.id_rol]
-    );
-
-    const politica = politicas[0];
-
-    if (politica && sesion.ultima_actividad) {
-      const [tiempo] = await pool.query(
-        `SELECT TIMESTAMPDIFF(SECOND, ?, NOW()) AS segundos_inactivo`,
-        [sesion.ultima_actividad]
-      );
-
-      const segundosInactivo = tiempo[0].segundos_inactivo;
-
-      if (segundosInactivo > politica.tiempo_inactividad_segundos) {
-        await pool.query(
-          `UPDATE usuario_sesion
-           SET estado = 'Expirada',
-               fecha_expiracion = NOW(),
-               motivo_cierre = 'Sesión expirada por inactividad'
-           WHERE id_sesion = ?`,
-          [decoded.id_sesion]
-        );
-
-        await pool.query(
-          `INSERT INTO auditoria_logs_sistema
-           (id_usuario, modulo, accion, descripcion, ip_origen, user_agent, fecha_log)
-           VALUES (?, 'Seguridad', 'INACTIVIDAD_EXCEDIDA', ?, ?, ?, NOW())`,
-          [
-            user.id_usuario,
-            `Sesión expirada por inactividad. Tiempo inactivo: ${segundosInactivo} segundos`,
-            req.ip,
-            req.headers['user-agent'] || 'No identificado'
-          ]
-        );
-
-        return res.status(401).json({
-          ok: false,
-          mensaje: 'Sesión expirada por inactividad'
-        });
-      }
+    if (!await cicloSesion.validarActividad(decoded, user.id_rol, req.ip || null)) {
+      return res.status(401).json({ok:false, mensaje:'Sesion invalida, expirada o revocada'});
     }
-
-    await pool.query(
-      `UPDATE usuario_sesion
-       SET ultima_actividad = NOW()
-       WHERE id_sesion = ?`,
-      [decoded.id_sesion]
-    );
 
     req.usuario = {
       id_usuario: user.id_usuario,

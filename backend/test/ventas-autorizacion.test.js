@@ -57,6 +57,11 @@ function escenario({ rol = 'Cajero', sucursal = 1, activo = true, permiso = true
       if (nombre === 'express') return { Router: () => router };
       const destino = path.resolve(path.dirname(archivo), `${nombre}.js`);
       if (destino.endsWith(path.join('config', 'db.js'))) return pool;
+      // Esta suite cuenta transacciones de ventas; el procesador de auditoria
+      // tiene su propia suite con repositorio transaccional simulado.
+      if (destino.endsWith(path.join('services', 'eventosSeguridadService.js'))) return {
+        registrar: async () => query('INSERT INTO auditoria_logs_sistema (modulo) VALUES (?)', ['Seguridad'])
+      };
       if (destino.endsWith(path.join('middlewares', 'authMiddleware.js'))) {
         // Precondición del controlador: identidad ya validada por authMiddleware.
         return (req, res, next) => autenticado

@@ -1,38 +1,35 @@
+const eventosSeguridad = require('../services/eventosSeguridadService');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../config/db');
+const cicloSesion = require('../services/cicloSesionService');
 
-const obtenerIp = (req) => {
-  const forwarded = req.headers['x-forwarded-for'];
+const {obtenerIp} = require('../security/ipSeguridad');
 
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-
-  return req.ip || req.socket?.remoteAddress || '0.0.0.0';
-};
-
-const registrarLogSeguridad = async ({
-  idUsuario,
-  accion,
-  descripcion,
-  ipOrigen,
-  userAgent
-}) => {
-  await pool.query(
-    `INSERT INTO auditoria_logs_sistema
-     (id_usuario, modulo, accion, descripcion, ip_origen, user_agent, fecha_log)
-     VALUES (?, 'Seguridad', ?, ?, ?, ?, NOW())`,
-    [idUsuario, accion, descripcion, ipOrigen, userAgent]
-  );
-};
+const registrarLogSeguridad = datos => eventosSeguridad.registrar(datos);
 
 const login = async (req, res) => {
+  let cn;
+  const pendientes = [];
+  const finalizar = async (status, body, idUsuarioIp = null) => {
+    await cn.commit();
+    cn.release(); cn = null;
+    await cicloSesion.procesarEventos(pendientes);
+    if (idUsuarioIp != null) {
+      try { await eventosSeguridad.observarIp(idUsuarioIp, obtenerIp(req), true); }
+      catch { console.warn('SEGURIDAD_EVENTOS: observacion IP no registrada'); }
+    }
+    return res.status(status).json(body);
+  };
+  const registrarEnLogin = async datos => {
+    pendientes.push(await eventosSeguridad.registrarEnTransaccion(cn, datos));
+  };
   try {
     const { usuario, password } = req.body;
     const ipOrigen = obtenerIp(req);
     const userAgent = req.headers['user-agent'] || 'No identificado';
+    try { await eventosSeguridad.observarIp(null, obtenerIp(req)); } catch { console.warn('SEGURIDAD_EVENTOS: observacion IP no registrada'); }
 
     if (!usuario || !password) {
       return res.status(400).json({
@@ -41,32 +38,31 @@ const login = async (req, res) => {
       });
     }
 
-    const [usuarios] = await pool.query(
-      `SELECT 
-          u.*, 
-          r.nombre_rol
-       FROM usuarios u
-       INNER JOIN roles r ON u.id_rol = r.id_rol
-       WHERE u.usuario = ?
-       LIMIT 1`,
-      [usuario]
+    cn = await pool.getConnection();
+    await cn.beginTransaction();
+    // Todos los logins del mismo usuario se serializan antes de contar/crear sesiones.
+    const [usuarios] = await cn.query(
+      'SELECT * FROM usuarios WHERE usuario = ? LIMIT 1 FOR UPDATE', [usuario]
     );
 
     if (usuarios.length === 0) {
-      return res.status(401).json({
+      return await finalizar(401, {
         ok: false,
         mensaje: 'Credenciales inválidas'
       });
     }
 
     const user = usuarios[0];
+    const [[rol]] = await cn.query('SELECT nombre_rol FROM roles WHERE id_rol = ? FOR SHARE', [user.id_rol]);
+    if (!rol) throw new Error('ROL_INEXISTENTE');
+    user.nombre_rol = rol.nombre_rol;
 
     if (
       user.estado === 'Bloqueado' &&
       user.bloqueo_hasta &&
       new Date(user.bloqueo_hasta) <= new Date()
     ) {
-      await pool.query(
+      await cn.query(
         `UPDATE usuarios
          SET estado = 'Activo',
              intentos_fallidos = 0,
@@ -81,18 +77,18 @@ const login = async (req, res) => {
     }
 
     if (user.estado !== 'Activo') {
-      return res.status(403).json({
+      return await finalizar(403, {
         ok: false,
         mensaje: 'Usuario bloqueado o inactivo'
       });
     }
 
-    const [politicas] = await pool.query(
+    const [politicas] = await cn.query(
       `SELECT *
        FROM seguridad_politica_rol
        WHERE id_rol = ?
          AND estado = 'Activa'
-       LIMIT 1`,
+       LIMIT 1 FOR SHARE`,
       [user.id_rol]
     );
 
@@ -109,7 +105,7 @@ const login = async (req, res) => {
       const nuevosIntentos = intentosActuales + 1;
 
       if (nuevosIntentos >= politica.max_intentos_fallidos) {
-        await pool.query(
+        await cn.query(
           `UPDATE usuarios
            SET intentos_fallidos = ?,
                estado = 'Bloqueado',
@@ -119,34 +115,37 @@ const login = async (req, res) => {
           [nuevosIntentos, user.id_usuario]
         );
 
-        await registrarLogSeguridad({
+        await registrarEnLogin({
           idUsuario: user.id_usuario,
           accion: 'BLOQUEO_USUARIO',
+          evidencia: {bloqueado:true,intentos:nuevosIntentos,maxIntentos:Number(politica.max_intentos_fallidos)},
           descripcion: 'Usuario bloqueado por superar intentos fallidos',
           ipOrigen,
           userAgent
         });
 
-        return res.status(403).json({
+        return await finalizar(403, {
           ok: false,
           mensaje: 'Usuario bloqueado por superar el máximo de intentos fallidos'
         });
       }
 
-      await pool.query(
+      await cn.query(
         `UPDATE usuarios
          SET intentos_fallidos = ?
          WHERE id_usuario = ?`,
         [nuevosIntentos, user.id_usuario]
       );
 
-      return res.status(401).json({
+      return await finalizar(401, {
         ok: false,
         mensaje: `Credenciales inválidas. Intento ${nuevosIntentos} de ${politica.max_intentos_fallidos}`
       });
     }
 
-    const [sesionesActivas] = await pool.query(
+    pendientes.push(...await cicloSesion.depurarParaLogin(cn, user.id_usuario, politica, ipOrigen));
+
+    const [sesionesActivas] = await cn.query(
       `SELECT COUNT(*) AS total
        FROM usuario_sesion
        WHERE id_usuario = ?
@@ -156,21 +155,22 @@ const login = async (req, res) => {
     );
 
     if (sesionesActivas[0].total >= politica.max_sesiones_activas) {
-      await registrarLogSeguridad({
+      await registrarEnLogin({
         idUsuario: user.id_usuario,
         accion: 'SESION_DUPLICADA',
+        evidencia: {sesionesActivas:Number(sesionesActivas[0].total),maxSesiones:Number(politica.max_sesiones_activas)},
         descripcion: 'Intento de iniciar más sesiones de las permitidas',
         ipOrigen,
         userAgent
       });
 
-      return res.status(403).json({
+      return await finalizar(403, {
         ok: false,
         mensaje: 'Ya existe una sesión activa para este usuario'
       });
     }
 
-    await pool.query(
+    await cn.query(
       `UPDATE usuarios
        SET intentos_fallidos = 0,
            bloqueo_hasta = NULL,
@@ -187,7 +187,7 @@ const login = async (req, res) => {
       .update(`${user.id_usuario}|${ipOrigen}|${userAgent}`)
       .digest('hex');
 
-    const [sesion] = await pool.query(
+    const [sesion] = await cn.query(
       `INSERT INTO usuario_sesion
        (
         id_usuario,
@@ -222,7 +222,7 @@ const login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
 
-    await registrarLogSeguridad({
+    await registrarEnLogin({
       idUsuario: user.id_usuario,
       accion: 'LOGIN_EXITOSO',
       descripcion: 'Inicio de sesión correcto',
@@ -230,7 +230,7 @@ const login = async (req, res) => {
       userAgent
     });
 
-    return res.json({
+    return await finalizar(200, {
       ok: true,
       mensaje: 'Login exitoso',
       token,
@@ -247,10 +247,17 @@ const login = async (req, res) => {
         estado: user.estado,
         requiere_cambio_password: Number(user.requiere_cambio_password || 0)
       }
-    });
+    }, user.id_usuario);
 
   } catch (error) {
-    console.error('Error en login:', error);
+    if (cn) {
+      let descartar=false;
+      try { await cn.rollback(); }
+      catch { descartar=true; cn.destroy(); console.warn('SESIONES: rollback no confirmado; conexion descartada'); }
+      if (!descartar) cn.release();
+      cn = null;
+    }
+    console.error('Error en login:');
 
     return res.status(500).json({
       ok: false,
@@ -278,7 +285,7 @@ const logout = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en logout:', error);
+    console.error('Error en logout:');
 
     res.status(500).json({
       ok: false,
@@ -446,7 +453,7 @@ const cambiarPassword = async (req, res) => {
       [
         idUsuario,
         `El usuario ${usuario.usuario} cambió su contraseña`,
-        req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || null,
+        obtenerIp(req),
         req.headers['user-agent'] || null
       ]
     );
@@ -457,7 +464,7 @@ const cambiarPassword = async (req, res) => {
       requiere_cambio_password: 0
     });
   } catch (error) {
-    console.error('Error al cambiar contraseña:', error);
+    console.error('Error al cambiar contraseña:');
 
     return res.status(500).json({
       ok: false,

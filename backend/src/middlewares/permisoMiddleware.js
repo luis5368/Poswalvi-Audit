@@ -1,3 +1,4 @@
+const eventosSeguridad = require('../services/eventosSeguridadService');
 const pool = require('../config/db');
 
 const verificarPermiso = (modulo, accion) => {
@@ -24,25 +25,7 @@ const verificarPermiso = (modulo, accion) => {
       );
 
       if (permisos.length === 0) {
-        await pool.query(
-          `INSERT INTO auditoria_logs_sistema
-           (
-            id_usuario,
-            modulo,
-            accion,
-            descripcion,
-            ip_origen,
-            user_agent,
-            fecha_log
-           )
-           VALUES (?, 'Seguridad', 'ACCESO_DENEGADO', ?, ?, ?, NOW())`,
-          [
-            req.usuario.id_usuario,
-            `Intento de acceso no autorizado a ${modulo}:${accion}`,
-            req.ip || '0.0.0.0',
-            req.headers['user-agent'] || 'No identificado'
-          ]
-        );
+        await eventosSeguridad.registrar({idUsuario:req.usuario.id_usuario,accion:'ACCESO_DENEGADO',evidencia:{permisoAsignado:false,moduloRequerido:modulo,accionRequerida:accion},ipOrigen:req.ip || null});
 
         return res.status(403).json({
           ok: false,
@@ -53,7 +36,7 @@ const verificarPermiso = (modulo, accion) => {
       next();
 
     } catch (error) {
-      console.error('Error verificando permiso:', error);
+      console.error('Error verificando permiso');
 
       return res.status(500).json({
         ok: false,

@@ -34,6 +34,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
+app.use('/api/alertas-seguridad', require('./routes/alertasSeguridadRoutes'));
 app.use('/api/sucursales', sucursalesRoutes);
 app.use('/api/cajas', cajasRoutes);
 app.use('/api/turnos-caja', turnosCajaRoutes);
@@ -51,4 +52,4 @@ app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/asignaciones-caja', asignacionesCajaRoutes);
 
 app.use('/api', require('./routes/pg2Routes'));
-module.exports = app;  
+module.exports = app;

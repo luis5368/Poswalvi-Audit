@@ -19,6 +19,7 @@ import Inventario from '../pages/inventario/Inventario';
 import Ventas from '../pages/ventas/Ventas';
 import Compras from '../pages/compras/Compras';
 import CajaTurnos from '../pages/caja/CajaTurnos';
+import CentroAlertas from '../pages/seguridad/CentroAlertas';
 
 const RutaPrivada = ({ children }) => {
   const { estaAutenticado, cargandoAuth } = useAuth();
@@ -83,6 +84,7 @@ const AppRouter = () => {
   useEffect(()=>{trazaNavegacion("ruta_SPA",{anterior:anterior.current,nueva:pathname,autenticado:estaAutenticado});anterior.current=pathname;},[pathname,estaAutenticado]);
   return (
     <Routes>
+      <Route path="/alertas-seguridad" element={<RutaPrivadaNormal><CentroAlertas /></RutaPrivadaNormal>} />
       <Route path="/reportes" element={<RutaPrivadaNormal><Reportes /></RutaPrivadaNormal>} />
       <Route path="/configuracion" element={<RutaPrivadaNormal><Configuracion /></RutaPrivadaNormal>} />
       <Route path="/login" element={<Login />} />

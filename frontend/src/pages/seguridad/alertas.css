@@ -1,0 +1,16 @@
+.centro-alertas .alertas-filtros {display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;align-items:end;margin-bottom:24px;}
+.centro-alertas .alertas-indicadores {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;}
+.centro-alertas .alertas-indicadores div {padding:20px;background:rgba(15,23,42,.84);border:1px solid rgba(148,163,184,.2);border-radius:20px;}
+.centro-alertas dd {margin:8px 0 0;font-size:24px;font-variant-numeric:tabular-nums;}
+.centro-alertas .alerta-fecha {white-space:nowrap;}
+.centro-alertas .clientes-table {min-width:1050px;}
+.centro-alertas .alertas-paginacion {display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:16px;}
+.centro-alertas .audit-review-detail button {margin:8px 12px 0 0;}
+.centro-alertas .clientes-table-wrap:focus-visible {outline:2px solid #7dd3fc;outline-offset:3px;}
+@media(max-width:480px){.centro-alertas h1 {font-size:26px;}.centro-alertas .clientes-panel {padding:12px;}}
+@media(max-width:1000px){
+  .main-layout:has(.centro-alertas) .topbar {height:auto;min-height:76px;padding:16px;flex-wrap:wrap;gap:16px;}
+  .main-layout:has(.centro-alertas) .topbar-search {min-width:0;max-width:100%;}
+  .main-layout:has(.centro-alertas) .topbar-search input {min-width:0;width:0;}
+  .main-layout:has(.centro-alertas) .topbar-actions {max-width:100%;flex-wrap:wrap;}
+}
